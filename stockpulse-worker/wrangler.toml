@@ -1,0 +1,12 @@
+name = "stockpulse-api"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# KV 스토리지 바인딩
+[[kv_namespaces]]
+binding = "STOCK_DATA"
+id = "7f2f2524892043e393269f0a96b716a3"
+
+# 매일 오후 4시 (한국시간 = UTC 오전 7시) 자동 실행
+[triggers]
+crons = ["0 7 * * 1-5"]

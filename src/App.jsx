@@ -1,727 +1,632 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend } from "recharts";
-import _ from "lodash";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend, PieChart, Pie } from "recharts";
 
 // ============================================================
-// MOCK DATA GENERATOR - 실전급 시뮬레이션 데이터
+// THEME
 // ============================================================
-const SECTORS = [
-  { id: "반도체", color: "#00E5A0", icon: "⚡" },
-  { id: "2차전지", color: "#FF6B6B", icon: "🔋" },
-  { id: "바이오", color: "#4ECDC4", icon: "🧬" },
-  { id: "AI/소프트웨어", color: "#A78BFA", icon: "🤖" },
-  { id: "자동차", color: "#F59E0B", icon: "🚗" },
-  { id: "금융", color: "#3B82F6", icon: "🏦" },
-  { id: "엔터/미디어", color: "#EC4899", icon: "🎬" },
-  { id: "방산/조선", color: "#6366F1", icon: "🚢" },
-  { id: "화학/소재", color: "#14B8A6", icon: "🧪" },
-  { id: "유통/소비재", color: "#F97316", icon: "🛒" },
+const DARK = {
+  bg: "#0A0E17", bgCard: "#111827", bgSurface: "#1A1F2E", bgHover: "#242B3D",
+  text: "#E5E7EB", textMuted: "#8A8F98", textDim: "#4B5563",
+  border: "rgba(255,255,255,0.06)", borderHover: "rgba(255,255,255,0.12)",
+  accent: "#00E5A0", accentDark: "#00B87D", danger: "#FF6B6B", warning: "#F59E0B",
+  info: "#3B82F6",
+};
+const LIGHT = {
+  bg: "#F9FAFB", bgCard: "#FFFFFF", bgSurface: "#F3F4F6", bgHover: "#E5E7EB",
+  text: "#111827", textMuted: "#6B7280", textDim: "#9CA3AF",
+  border: "rgba(0,0,0,0.08)", borderHover: "rgba(0,0,0,0.15)",
+  accent: "#059669", accentDark: "#047857", danger: "#DC2626", warning: "#D97706",
+  info: "#2563EB",
+};
+
+// ============================================================
+// PORTFOLIO THEORIES
+// ============================================================
+const THEORY_PORTFOLIOS = [
+  {
+    id: "allweather", name: "올웨더", author: "레이 달리오", color: "#3B82F6",
+    desc: "경제 4계절에 대응하는 포트폴리오",
+    assets: [
+      { name: "미국 주식 (SPY)", ticker: "SPY", weight: 30, type: "해외" },
+      { name: "미국 장기채 (TLT)", ticker: "TLT", weight: 40, type: "해외" },
+      { name: "미국 중기채 (IEF)", ticker: "IEF", weight: 15, type: "해외" },
+      { name: "금 (GLD)", ticker: "GLD", weight: 7.5, type: "해외" },
+      { name: "원자재 (DBC)", ticker: "DBC", weight: 7.5, type: "해외" },
+    ]
+  },
+  {
+    id: "6040", name: "60/40", author: "전통적", color: "#10B981",
+    desc: "가장 기본적인 주식/채권 배분",
+    assets: [
+      { name: "미국 주식 (SPY)", ticker: "SPY", weight: 60, type: "해외" },
+      { name: "미국 채권 (AGG)", ticker: "AGG", weight: 40, type: "해외" },
+    ]
+  },
+  {
+    id: "permanent", name: "영구 포트폴리오", author: "해리 브라운", color: "#8B5CF6",
+    desc: "호황/불황/인플레/디플레 대응",
+    assets: [
+      { name: "미국 주식 (SPY)", ticker: "SPY", weight: 25, type: "해외" },
+      { name: "미국 장기채 (TLT)", ticker: "TLT", weight: 25, type: "해외" },
+      { name: "금 (GLD)", ticker: "GLD", weight: 25, type: "해외" },
+      { name: "단기채/현금 (SHY)", ticker: "SHY", weight: 25, type: "해외" },
+    ]
+  },
+  {
+    id: "goldenbutterfly", name: "황금 나비", author: "Tyler", color: "#F59E0B",
+    desc: "영구 포트폴리오의 변형, 소형가치주 추가",
+    assets: [
+      { name: "미국 주식 (SPY)", ticker: "SPY", weight: 20, type: "해외" },
+      { name: "소형가치주 (IWN)", ticker: "IWN", weight: 20, type: "해외" },
+      { name: "미국 장기채 (TLT)", ticker: "TLT", weight: 20, type: "해외" },
+      { name: "단기채 (SHY)", ticker: "SHY", weight: 20, type: "해외" },
+      { name: "금 (GLD)", ticker: "GLD", weight: 20, type: "해외" },
+    ]
+  },
+  {
+    id: "markowitz", name: "마코위츠", author: "해리 마코위츠", color: "#EC4899",
+    desc: "효율적 프론티어 기반 최적 배분",
+    assets: [
+      { name: "미국 주식 (SPY)", ticker: "SPY", weight: 40, type: "해외" },
+      { name: "선진국 주식 (EFA)", ticker: "EFA", weight: 15, type: "해외" },
+      { name: "신흥국 주식 (EEM)", ticker: "EEM", weight: 10, type: "해외" },
+      { name: "미국 채권 (AGG)", ticker: "AGG", weight: 25, type: "해외" },
+      { name: "부동산 (VNQ)", ticker: "VNQ", weight: 10, type: "해외" },
+    ]
+  },
+  {
+    id: "riskparity", name: "리스크 패리티", author: "브리지워터", color: "#06B6D4",
+    desc: "자산별 리스크 기여도를 균등하게",
+    assets: [
+      { name: "미국 주식 (SPY)", ticker: "SPY", weight: 20, type: "해외" },
+      { name: "미국 장기채 (TLT)", ticker: "TLT", weight: 35, type: "해외" },
+      { name: "금 (GLD)", ticker: "GLD", weight: 15, type: "해외" },
+      { name: "원자재 (DBC)", ticker: "DBC", weight: 10, type: "해외" },
+      { name: "미국 중기채 (IEF)", ticker: "IEF", weight: 20, type: "해외" },
+    ]
+  }
 ];
 
-const STOCK_NAMES = {
-  "반도체": ["삼성전자", "SK하이닉스", "한미반도체", "리노공업", "이오테크닉스", "주성엔지니어링", "ISC", "테크윙"],
-  "2차전지": ["LG에너지솔루션", "삼성SDI", "에코프로비엠", "포스코퓨처엠", "엘앤에프", "에코프로", "천보", "나노신소재"],
-  "바이오": ["삼성바이오로직스", "셀트리온", "SK바이오팜", "유한양행", "녹십자", "HLB", "알테오젠", "리가켐바이오"],
-  "AI/소프트웨어": ["네이버", "카카오", "더존비즈온", "한글과컴퓨터", "솔트룩스", "코난테크놀로지", "셀바스AI", "마인즈랩"],
-  "자동차": ["현대차", "기아", "현대모비스", "만도", "HL만도", "한온시스템", "에스엘", "현대위아"],
-  "금융": ["KB금융", "신한지주", "하나금융지주", "삼성생명", "메리츠금융지주", "카카오뱅크", "한국금융지주", "우리금융지주"],
-  "엔터/미디어": ["하이브", "JYP Ent.", "SM", "YG Ent.", "카카오엔터", "스튜디오드래곤", "에이스토리", "콘텐트리중앙"],
-  "방산/조선": ["한화에어로스페이스", "HD한국조선해양", "한화오션", "HD현대중공업", "LIG넥스원", "한국항공우주", "한화시스템", "풍산"],
-  "화학/소재": ["LG화학", "롯데케미칼", "한화솔루션", "금호석유", "대한유화", "OCI", "효성첨단소재", "SKC"],
-  "유통/소비재": ["쿠팡", "이마트", "BGF리테일", "GS리테일", "롯데쇼핑", "현대백화점", "CJ올리브영", "무신사"],
-};
+const DEFAULT_ANNOTATIONS = [
+  { date: "2001-09", label: "9/11 테러", desc: "미국 본토 테러 공격, 글로벌 시장 급락" },
+  { date: "2003-03", label: "이라크 전쟁", desc: "미국의 이라크 침공 시작" },
+  { date: "2008-09", label: "리먼 사태", desc: "리먼 브라더스 파산, 글로벌 금융위기" },
+  { date: "2011-08", label: "미국 신용등급 강등", desc: "S&P, 미국 AAA→AA+ 강등" },
+  { date: "2020-03", label: "코로나 쇼크", desc: "팬데믹 선언, 33일 만에 -34%" },
+  { date: "2022-02", label: "우크라이나 전쟁", desc: "러시아 침공, 원자재 급등" },
+  { date: "2022-09", label: "금리 인상 충격", desc: "연준 75bp 연속 인상, 채권 역사적 하락" },
+];
 
-function generatePrice(base, volatility = 0.02) {
-  return base * (1 + (Math.random() - 0.48) * volatility);
+// ============================================================
+// BACKTEST ENGINE (시뮬레이션)
+// ============================================================
+function generateMonthlyData(startYear, endYear) {
+  const months = [];
+  for (let y = startYear; y <= endYear; y++) {
+    for (let m = 1; m <= 12; m++) {
+      if (y === endYear && m > 5) break;
+      months.push(`${y}-${String(m).padStart(2, "0")}`);
+    }
+  }
+  return months;
 }
 
-function generateStockData() {
-  const stocks = [];
-  SECTORS.forEach((sector) => {
-    const names = STOCK_NAMES[sector.id];
-    names.forEach((name, idx) => {
-      const basePrice = Math.floor(Math.random() * 300000) + 5000;
-      const change = (Math.random() - 0.42) * 10;
-      const rs1w = Math.floor(Math.random() * 99) + 1;
-      const rs1m = Math.floor(Math.random() * 99) + 1;
-      const rs3m = Math.floor(Math.random() * 99) + 1;
-      const rs6m = Math.floor(Math.random() * 99) + 1;
-      const rs1y = Math.floor(Math.random() * 99) + 1;
-      const integratedRS = Math.round(rs1w * 0.1 + rs1m * 0.2 + rs3m * 0.3 + rs6m * 0.25 + rs1y * 0.15);
-      const volume = Math.floor(Math.random() * 5000000) + 100000;
-      const marketCap = Math.floor(basePrice * (Math.random() * 1000000 + 100000) / 100000000);
+function simulatePortfolio(portfolio, months, hedgeRatio, hedgeCost) {
+  let value = 10000;
+  const data = [];
+  let peak = value;
+  let maxDD = 0;
+  const monthlyReturns = [];
 
-      const priceHistory = [];
-      let p = basePrice * 0.85;
-      for (let i = 0; i < 60; i++) {
-        p = generatePrice(p, 0.03);
-        priceHistory.push({ day: i, price: Math.round(p), vol: Math.floor(Math.random() * volume) });
-      }
+  const seed = portfolio.id ? portfolio.id.split("").reduce((a, c) => a + c.charCodeAt(0), 0) : 42;
+  let rng = seed;
+  const rand = () => { rng = (rng * 16807 + 0) % 2147483647; return (rng / 2147483647) - 0.5; };
 
-      const rsHistory = [];
-      let r = Math.max(10, integratedRS - 30);
-      for (let i = 0; i < 30; i++) {
-        r = Math.min(99, Math.max(1, r + (Math.random() - 0.45) * 8));
-        rsHistory.push({ day: i, rs: Math.round(r) });
-      }
+  const baseReturn = portfolio.assets.reduce((acc, a) => {
+    if (a.ticker === "SPY" || a.ticker === "IWN" || a.ticker === "EFA" || a.ticker === "EEM") return acc + 0.008 * (a.weight / 100);
+    if (a.ticker === "TLT" || a.ticker === "IEF" || a.ticker === "AGG" || a.ticker === "SHY") return acc + 0.003 * (a.weight / 100);
+    if (a.ticker === "GLD") return acc + 0.005 * (a.weight / 100);
+    if (a.ticker === "DBC") return acc + 0.002 * (a.weight / 100);
+    if (a.ticker === "VNQ") return acc + 0.006 * (a.weight / 100);
+    return acc + 0.005 * (a.weight / 100);
+  }, 0);
 
-      stocks.push({
-        id: `${sector.id}-${idx}`,
-        name,
-        sector: sector.id,
-        sectorColor: sector.color,
-        sectorIcon: sector.icon,
-        price: basePrice,
-        change: Math.round(change * 100) / 100,
-        volume,
-        marketCap,
-        rs1w,
-        rs1m,
-        rs3m,
-        rs6m,
-        rs1y,
-        integratedRS,
-        rsRank: 0,
-        priceHistory,
-        rsHistory,
-        newHigh52w: Math.random() > 0.85,
-        aboveMA20: Math.random() > 0.35,
-        aboveMA60: Math.random() > 0.45,
-        aboveMA120: Math.random() > 0.55,
-        momentum: change > 0 ? "상승" : "하락",
-        trendScore: Math.floor(Math.random() * 100),
-      });
-    });
+  const vol = portfolio.assets.reduce((acc, a) => {
+    if (a.ticker === "SPY" || a.ticker === "IWN") return acc + 0.045 * (a.weight / 100);
+    if (a.ticker === "EFA" || a.ticker === "EEM") return acc + 0.055 * (a.weight / 100);
+    if (a.ticker === "TLT") return acc + 0.025 * (a.weight / 100);
+    if (a.ticker === "IEF" || a.ticker === "AGG" || a.ticker === "SHY") return acc + 0.012 * (a.weight / 100);
+    if (a.ticker === "GLD") return acc + 0.035 * (a.weight / 100);
+    return acc + 0.03 * (a.weight / 100);
+  }, 0);
+
+  const foreignWeight = portfolio.assets.filter(a => a.type === "해외").reduce((s, a) => s + a.weight, 0) / 100;
+  const hedgeCostMonthly = (hedgeCost / 100) * (hedgeRatio / 100) * foreignWeight / 12;
+
+  months.forEach((month, i) => {
+    const isCrisis = ["2001-09", "2002-06", "2008-09", "2008-10", "2008-11", "2020-03"].includes(month);
+    const isBoom = ["2009-03", "2009-04", "2013-01", "2020-04", "2020-11", "2021-01"].includes(month);
+    let r = baseReturn + rand() * vol * 2;
+    if (isCrisis) r = -0.08 - Math.abs(rand()) * 0.12;
+    if (isBoom) r = 0.06 + Math.abs(rand()) * 0.08;
+
+    const fxEffect = (1 - hedgeRatio / 100) * foreignWeight * (rand() * 0.02);
+    r += fxEffect - hedgeCostMonthly;
+
+    value *= (1 + r);
+    monthlyReturns.push(r);
+    if (value > peak) peak = value;
+    const dd = (value - peak) / peak;
+    if (dd < maxDD) maxDD = dd;
+
+    data.push({ date: month, value: Math.round(value), dd: Math.round(dd * 10000) / 100 });
   });
 
-  stocks.sort((a, b) => b.integratedRS - a.integratedRS);
-  stocks.forEach((s, i) => (s.rsRank = i + 1));
-  return stocks;
-}
+  const totalReturn = (value / 10000 - 1) * 100;
+  const years = months.length / 12;
+  const cagr = (Math.pow(value / 10000, 1 / years) - 1) * 100;
+  const avgReturn = monthlyReturns.reduce((a, b) => a + b, 0) / monthlyReturns.length;
+  const variance = monthlyReturns.reduce((a, r) => a + (r - avgReturn) ** 2, 0) / monthlyReturns.length;
+  const annualVol = Math.sqrt(variance) * Math.sqrt(12) * 100;
+  const sharpe = annualVol > 0 ? (cagr - 2) / annualVol : 0;
 
-function generateSectorRS() {
-  return SECTORS.map((s) => ({
-    ...s,
-    rs: Math.floor(Math.random() * 40) + 60,
-    change1w: Math.round((Math.random() - 0.4) * 8 * 100) / 100,
-    change1m: Math.round((Math.random() - 0.4) * 15 * 100) / 100,
-    leadingStocks: Math.floor(Math.random() * 5) + 1,
-    momentum: Math.random() > 0.5 ? "강세" : "약세",
-  })).sort((a, b) => b.rs - a.rs);
-}
-
-// ============================================================
-// COMPONENTS
-// ============================================================
-
-const RSBadge = ({ value, size = "md" }) => {
-  const getColor = (v) => {
-    if (v >= 80) return { bg: "rgba(0,229,160,0.15)", text: "#00E5A0", border: "rgba(0,229,160,0.3)" };
-    if (v >= 60) return { bg: "rgba(78,205,196,0.12)", text: "#4ECDC4", border: "rgba(78,205,196,0.25)" };
-    if (v >= 40) return { bg: "rgba(245,158,11,0.12)", text: "#F59E0B", border: "rgba(245,158,11,0.25)" };
-    if (v >= 20) return { bg: "rgba(255,107,107,0.12)", text: "#FF6B6B", border: "rgba(255,107,107,0.25)" };
-    return { bg: "rgba(239,68,68,0.15)", text: "#EF4444", border: "rgba(239,68,68,0.3)" };
+  return {
+    data, totalReturn: Math.round(totalReturn * 10) / 10,
+    cagr: Math.round(cagr * 100) / 100, mdd: Math.round(maxDD * 10000) / 100,
+    sharpe: Math.round(sharpe * 100) / 100, annualVol: Math.round(annualVol * 10) / 10,
   };
-  const c = getColor(value);
-  const s = size === "lg" ? { padding: "6px 14px", fontSize: 16, fontWeight: 800 } : size === "sm" ? { padding: "2px 6px", fontSize: 11, fontWeight: 700 } : { padding: "3px 10px", fontSize: 13, fontWeight: 700 };
-  return (
-    <span style={{ ...s, background: c.bg, color: c.text, border: `1px solid ${c.border}`, borderRadius: 6, fontFamily: "'JetBrains Mono', monospace", display: "inline-block" }}>
-      {value}
-    </span>
-  );
-};
-
-const ChangeIndicator = ({ value }) => {
-  const isUp = value > 0;
-  const color = isUp ? "#00E5A0" : value < 0 ? "#FF6B6B" : "#8A8F98";
-  return (
-    <span style={{ color, fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, fontSize: 13 }}>
-      {isUp ? "▲" : value < 0 ? "▼" : "─"} {Math.abs(value).toFixed(2)}%
-    </span>
-  );
-};
-
-const MiniChart = ({ data, color = "#00E5A0", height = 40, width = 120 }) => (
-  <ResponsiveContainer width={width} height={height}>
-    <AreaChart data={data}>
-      <defs>
-        <linearGradient id={`mc-${color.replace('#','')}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity={0.3} />
-          <stop offset="100%" stopColor={color} stopOpacity={0} />
-        </linearGradient>
-      </defs>
-      <Area type="monotone" dataKey="price" stroke={color} strokeWidth={1.5} fill={`url(#mc-${color.replace('#','')})`} dot={false} />
-    </AreaChart>
-  </ResponsiveContainer>
-);
-
-const MiniRSChart = ({ data, height = 40, width = 80 }) => (
-  <ResponsiveContainer width={width} height={height}>
-    <LineChart data={data}>
-      <Line type="monotone" dataKey="rs" stroke="#A78BFA" strokeWidth={1.5} dot={false} />
-    </LineChart>
-  </ResponsiveContainer>
-);
-
-const TabButton = ({ active, children, onClick, count }) => (
-  <button
-    onClick={onClick}
-    style={{
-      padding: "10px 20px",
-      background: active ? "linear-gradient(135deg, #00E5A0, #00B87D)" : "rgba(255,255,255,0.03)",
-      color: active ? "#0A0E17" : "#8A8F98",
-      border: active ? "none" : "1px solid rgba(255,255,255,0.06)",
-      borderRadius: 10,
-      fontWeight: active ? 800 : 500,
-      fontSize: 14,
-      cursor: "pointer",
-      transition: "all 0.2s",
-      fontFamily: "'Pretendard', sans-serif",
-      display: "flex",
-      alignItems: "center",
-      gap: 8,
-    }}
-  >
-    {children}
-    {count !== undefined && (
-      <span style={{ fontSize: 11, opacity: 0.7, background: active ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.08)", padding: "2px 6px", borderRadius: 4 }}>
-        {count}
-      </span>
-    )}
-  </button>
-);
-
-const FilterChip = ({ active, children, onClick }) => (
-  <button
-    onClick={onClick}
-    style={{
-      padding: "5px 12px",
-      background: active ? "rgba(0,229,160,0.12)" : "rgba(255,255,255,0.04)",
-      color: active ? "#00E5A0" : "#6B7280",
-      border: `1px solid ${active ? "rgba(0,229,160,0.25)" : "rgba(255,255,255,0.06)"}`,
-      borderRadius: 20,
-      fontSize: 12,
-      fontWeight: 600,
-      cursor: "pointer",
-      transition: "all 0.15s",
-      fontFamily: "'Pretendard', sans-serif",
-    }}
-  >
-    {children}
-  </button>
-);
+}
 
 // ============================================================
-// MAIN APP
+// APP
 // ============================================================
-export default function StockAnalysisDashboard() {
-  const [stocks, setStocks] = useState([]);
-  const [sectorData, setSectorData] = useState([]);
-  const [activeTab, setActiveTab] = useState("integrated_rs");
-  const [selectedSector, setSelectedSector] = useState("전체");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [sortBy, setSortBy] = useState("integratedRS");
-  const [sortDir, setSortDir] = useState("desc");
-  const [selectedStock, setSelectedStock] = useState(null);
-  const [rsFilter, setRsFilter] = useState("all");
-  const [page, setPage] = useState(1);
-  const [marketSummary, setMarketSummary] = useState(null);
-  const [loading, setLoading] = useState(true);
+export default function PortfolioBacktester() {
+  const [dark, setDark] = useState(true);
+  const t = dark ? DARK : LIGHT;
 
-  useEffect(() => {
-    setTimeout(() => {
-      const s = generateStockData();
-      setStocks(s);
-      setSectorData(generateSectorRS());
-      setMarketSummary({
-        kospi: { value: 2687.45, change: 0.83 },
-        kosdaq: { value: 876.32, change: 1.24 },
-        kospi200: { value: 365.21, change: 0.91 },
-        rsAbove80: s.filter((x) => x.integratedRS >= 80).length,
-        rsAbove60: s.filter((x) => x.integratedRS >= 60).length,
-        newHighs: s.filter((x) => x.newHigh52w).length,
-        totalStocks: s.length,
-        advancers: s.filter((x) => x.change > 0).length,
-        decliners: s.filter((x) => x.change < 0).length,
+  const [selectedPortfolios, setSelectedPortfolios] = useState(["allweather", "6040"]);
+  const [customPortfolios, setCustomPortfolios] = useState([]);
+  const [startDate, setStartDate] = useState("2000-01");
+  const [endDate, setEndDate] = useState("2025-05");
+  const [rebalance, setRebalance] = useState("monthly");
+  const [hedgeRatio, setHedgeRatio] = useState(50);
+  const [hedgeCost, setHedgeCost] = useState(1.8);
+  const [chartTab, setChartTab] = useState("cumulative");
+  const [showAnnotations, setShowAnnotations] = useState(true);
+  const [annotations, setAnnotations] = useState(DEFAULT_ANNOTATIONS);
+  const [showModal, setShowModal] = useState(false);
+  const [showAnnotationModal, setShowAnnotationModal] = useState(false);
+  const [newAnnotation, setNewAnnotation] = useState({ date: "", label: "", desc: "" });
+
+  const [editingPortfolio, setEditingPortfolio] = useState({
+    name: "", color: "#D85A30", assets: [{ name: "", ticker: "", weight: 0, type: "해외" }]
+  });
+
+  const allPortfolios = [...THEORY_PORTFOLIOS, ...customPortfolios];
+  const activePortfolios = allPortfolios.filter(p => selectedPortfolios.includes(p.id));
+
+  const months = useMemo(() => {
+    const sy = parseInt(startDate.split("-")[0]);
+    const ey = parseInt(endDate.split("-")[0]);
+    return generateMonthlyData(sy, ey);
+  }, [startDate, endDate]);
+
+  const results = useMemo(() => {
+    const r = {};
+    activePortfolios.forEach(p => {
+      r[p.id] = simulatePortfolio(p, months, hedgeRatio, hedgeCost);
+    });
+    return r;
+  }, [activePortfolios, months, hedgeRatio, hedgeCost]);
+
+  const chartData = useMemo(() => {
+    if (activePortfolios.length === 0) return [];
+    const firstId = activePortfolios[0].id;
+    const baseData = results[firstId]?.data || [];
+    return baseData.map((d, i) => {
+      const point = { date: d.date };
+      activePortfolios.forEach(p => {
+        if (results[p.id]?.data[i]) {
+          point[`${p.id}_val`] = results[p.id].data[i].value;
+          point[`${p.id}_dd`] = results[p.id].data[i].dd;
+        }
       });
-      setLoading(false);
-    }, 600);
-  }, []);
+      return point;
+    });
+  }, [results, activePortfolios]);
 
-  const filteredStocks = useMemo(() => {
-    let result = [...stocks];
-    if (selectedSector !== "전체") result = result.filter((s) => s.sector === selectedSector);
-    if (searchQuery) result = result.filter((s) => s.name.toLowerCase().includes(searchQuery.toLowerCase()));
-    if (rsFilter === "rs80") result = result.filter((s) => s.integratedRS >= 80);
-    else if (rsFilter === "rs60") result = result.filter((s) => s.integratedRS >= 60);
-    else if (rsFilter === "newHigh") result = result.filter((s) => s.newHigh52w);
-    else if (rsFilter === "rising") result = result.filter((s) => s.change > 0 && s.integratedRS >= 50);
-    result.sort((a, b) => (sortDir === "desc" ? b[sortBy] - a[sortBy] : a[sortBy] - b[sortBy]));
-    return result;
-  }, [stocks, selectedSector, searchQuery, rsFilter, sortBy, sortDir]);
+  const yearlyData = useMemo(() => {
+    const years = {};
+    activePortfolios.forEach(p => {
+      const data = results[p.id]?.data || [];
+      data.forEach((d, i) => {
+        const year = d.date.split("-")[0];
+        if (!years[year]) years[year] = { year };
+        if (d.date.endsWith("-12") || i === data.length - 1) {
+          const janIdx = data.findIndex(x => x.date.startsWith(year + "-01"));
+          if (janIdx >= 0) {
+            years[year][p.id] = Math.round(((d.value / data[janIdx].value) - 1) * 10000) / 100;
+          }
+        }
+      });
+    });
+    return Object.values(years).sort((a, b) => a.year.localeCompare(b.year));
+  }, [results, activePortfolios]);
 
-  const paginatedStocks = filteredStocks.slice(0, page * 20);
-
-  const handleSort = (key) => {
-    if (sortBy === key) setSortDir(sortDir === "desc" ? "asc" : "desc");
-    else { setSortBy(key); setSortDir("desc"); }
+  const togglePortfolio = (id) => {
+    setSelectedPortfolios(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
 
-  const SortHeader = ({ label, field, width, align }) => (
-    <th
-      onClick={() => handleSort(field)}
-      style={{ padding: "12px 8px", textAlign: align || "right", fontSize: 11, fontWeight: 700, color: sortBy === field ? "#00E5A0" : "#6B7280", cursor: "pointer", width, whiteSpace: "nowrap", letterSpacing: "0.5px", textTransform: "uppercase", borderBottom: "1px solid rgba(255,255,255,0.06)", userSelect: "none" }}
-    >
-      {label} {sortBy === field ? (sortDir === "desc" ? "↓" : "↑") : ""}
-    </th>
+  const addCustomPortfolio = () => {
+    const id = "custom_" + Date.now();
+    const np = { ...editingPortfolio, id, assets: editingPortfolio.assets.filter(a => a.name && a.weight > 0) };
+    setCustomPortfolios(prev => [...prev, np]);
+    setSelectedPortfolios(prev => [...prev, id]);
+    setShowModal(false);
+    setEditingPortfolio({ name: "", color: "#D85A30", assets: [{ name: "", ticker: "", weight: 0, type: "해외" }] });
+  };
+
+  const addAnnotation = () => {
+    if (newAnnotation.date && newAnnotation.label) {
+      setAnnotations(prev => [...prev, { ...newAnnotation }].sort((a, b) => a.date.localeCompare(b.date)));
+      setNewAnnotation({ date: "", label: "", desc: "" });
+      setShowAnnotationModal(false);
+    }
+  };
+
+  const removeCustom = (id) => {
+    setCustomPortfolios(prev => prev.filter(p => p.id !== id));
+    setSelectedPortfolios(prev => prev.filter(x => x !== id));
+  };
+
+  const css = `
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Outfit:wght@300;400;600;800;900&display=swap');
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: ${t.border}; border-radius: 3px; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+    input[type=range] { -webkit-appearance: none; background: ${t.border}; height: 4px; border-radius: 2px; outline: none; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: ${t.accent}; cursor: pointer; }
+    select, input[type=text], input[type=number] { background: ${t.bgSurface}; border: 1px solid ${t.border}; color: ${t.text}; border-radius: 6px; padding: 6px 10px; font-size: 12px; outline: none; font-family: inherit; }
+    select:focus, input:focus { border-color: ${t.accent}; }
+  `;
+
+  const Chip = ({ active, color, children, onClick, onRemove }) => (
+    <div onClick={onClick} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 20, border: `1px solid ${active ? (color || t.accent) : t.border}`, background: active ? (dark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)") : "transparent", cursor: "pointer", fontSize: 12, fontWeight: active ? 600 : 400, color: active ? t.text : t.textMuted, transition: "all 0.15s" }}>
+      {color && <span style={{ width: 8, height: 8, borderRadius: "50%", background: color }} />}
+      {children}
+      {onRemove && <span onClick={e => { e.stopPropagation(); onRemove(); }} style={{ marginLeft: 4, fontSize: 10, opacity: 0.5, cursor: "pointer" }}>✕</span>}
+    </div>
   );
 
-  if (loading) {
-    return (
-      <div style={{ minHeight: "100vh", background: "#0A0E17", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16 }}>
-        <div style={{ width: 48, height: 48, border: "3px solid rgba(0,229,160,0.2)", borderTop: "3px solid #00E5A0", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-        <p style={{ color: "#8A8F98", fontFamily: "'Pretendard', sans-serif", fontSize: 14 }}>데이터 로딩 중...</p>
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+  const TabBtn = ({ active, children, onClick }) => (
+    <button onClick={onClick} style={{ padding: "5px 14px", borderRadius: 6, border: `1px solid ${active ? t.accent : t.border}`, background: active ? (dark ? "rgba(0,229,160,0.1)" : "rgba(5,150,105,0.08)") : "transparent", color: active ? t.accent : t.textMuted, fontSize: 12, fontWeight: 500, cursor: "pointer", transition: "all 0.15s", fontFamily: "'Outfit', sans-serif" }}>{children}</button>
+  );
+
+  const MetricCard = ({ label, value, sub, color }) => (
+    <div style={{ background: t.bgSurface, borderRadius: 10, padding: "14px 16px", border: `1px solid ${t.border}` }}>
+      <div style={{ fontSize: 11, color: t.textMuted, marginBottom: 6 }}>{label}</div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+        <span style={{ fontSize: 22, fontWeight: 800, fontFamily: "'Outfit', sans-serif", color: color || t.text }}>{value}</span>
+        {sub && <span style={{ fontSize: 11, color: t.textDim }}>{sub}</span>}
       </div>
-    );
-  }
+    </div>
+  );
+
+  const firstActive = activePortfolios[0];
+  const firstResult = firstActive ? results[firstActive.id] : null;
 
   return (
-    <div style={{ minHeight: "100vh", background: "#0A0E17", color: "#E5E7EB", fontFamily: "'Pretendard', -apple-system, sans-serif" }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Outfit:wght@300;400;600;800;900&display=swap');
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
-        ::-webkit-scrollbar-thumb { background: rgba(0,229,160,0.2); border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: rgba(0,229,160,0.4); }
-        @keyframes fadeInUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
-        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
-        @keyframes slideIn { from { opacity:0; transform:translateX(-20px); } to { opacity:1; transform:translateX(0); } }
-        tr:hover { background: rgba(255,255,255,0.02) !important; }
-      `}</style>
+    <div style={{ minHeight: "100vh", background: t.bg, color: t.text, fontFamily: "'Outfit', -apple-system, sans-serif", transition: "background 0.3s, color 0.3s" }}>
+      <style>{css}</style>
 
-      {/* ========== HEADER ========== */}
-      <header style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", padding: "0 24px", background: "rgba(10,14,23,0.95)", backdropFilter: "blur(20px)", position: "sticky", top: 0, zIndex: 100 }}>
-        <div style={{ maxWidth: 1440, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 64 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #00E5A0, #00B87D)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 900, color: "#0A0E17", fontFamily: "'Outfit', sans-serif" }}>S</div>
-            <div>
-              <span style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: 20, color: "#fff", letterSpacing: "-0.5px" }}>StockPulse</span>
-              <span style={{ fontSize: 10, color: "#00E5A0", marginLeft: 8, fontWeight: 700, background: "rgba(0,229,160,0.1)", padding: "2px 6px", borderRadius: 4 }}>RS ANALYZER</span>
-            </div>
+      {/* ===== HEADER ===== */}
+      <header style={{ borderBottom: `1px solid ${t.border}`, padding: "0 20px", background: dark ? "rgba(10,14,23,0.95)" : "rgba(255,255,255,0.95)", backdropFilter: "blur(12px)", position: "sticky", top: 0, zIndex: 100 }}>
+        <div style={{ maxWidth: 1400, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 52 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 30, height: 30, borderRadius: 8, background: `linear-gradient(135deg, ${t.accent}, ${t.accentDark})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 900, color: dark ? "#0A0E17" : "#fff" }}>P</div>
+            <span style={{ fontWeight: 800, fontSize: 17, letterSpacing: "-0.5px" }}>PortfolioLab</span>
+            <span style={{ fontSize: 10, color: t.accent, fontWeight: 700, background: dark ? "rgba(0,229,160,0.1)" : "rgba(5,150,105,0.08)", padding: "2px 6px", borderRadius: 4, marginLeft: 4 }}>BACKTEST</span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <div style={{ display: "flex", gap: 12, fontSize: 12 }}>
-              <span style={{ color: "#8A8F98" }}>KOSPI</span>
-              <span style={{ color: "#fff", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{marketSummary.kospi.value.toLocaleString()}</span>
-              <ChangeIndicator value={marketSummary.kospi.change} />
-              <span style={{ color: "rgba(255,255,255,0.15)", margin: "0 4px" }}>│</span>
-              <span style={{ color: "#8A8F98" }}>KOSDAQ</span>
-              <span style={{ color: "#fff", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{marketSummary.kosdaq.value.toLocaleString()}</span>
-              <ChangeIndicator value={marketSummary.kosdaq.change} />
-            </div>
-            <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#00E5A0", animation: "pulse 2s infinite" }} />
-          </div>
+          <button onClick={() => setDark(!dark)} style={{ background: t.bgSurface, border: `1px solid ${t.border}`, borderRadius: 8, padding: "6px 12px", color: t.textMuted, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+            {dark ? "☀️" : "🌙"} {dark ? "라이트" : "다크"}
+          </button>
         </div>
       </header>
 
-      {/* ========== MARKET OVERVIEW CARDS ========== */}
-      <div style={{ maxWidth: 1440, margin: "0 auto", padding: "20px 24px" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 24, animation: "fadeInUp 0.5s ease" }}>
-          {[
-            { label: "RS 80+ 종목", value: marketSummary.rsAbove80, sub: `전체 ${marketSummary.totalStocks}종목 중`, accent: "#00E5A0" },
-            { label: "RS 60+ 종목", value: marketSummary.rsAbove60, sub: "모멘텀 유효 구간", accent: "#4ECDC4" },
-            { label: "52주 신고가", value: marketSummary.newHighs, sub: "강한 추세 확인", accent: "#A78BFA" },
-            { label: "상승 / 하락", value: `${marketSummary.advancers} / ${marketSummary.decliners}`, sub: `비율 ${(marketSummary.advancers / marketSummary.totalStocks * 100).toFixed(0)}%`, accent: "#F59E0B" },
-          ].map((card, i) => (
-            <div key={i} style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: 14, padding: "18px 20px", position: "relative", overflow: "hidden" }}>
-              <div style={{ position: "absolute", top: 0, left: 0, width: 3, height: "100%", background: card.accent, borderRadius: "14px 0 0 14px" }} />
-              <div style={{ fontSize: 11, color: "#6B7280", fontWeight: 600, marginBottom: 8, letterSpacing: "0.5px" }}>{card.label}</div>
-              <div style={{ fontSize: 28, fontWeight: 900, fontFamily: "'Outfit', sans-serif", color: "#fff", letterSpacing: "-1px" }}>{card.value}</div>
-              <div style={{ fontSize: 11, color: "#4B5563", marginTop: 4 }}>{card.sub}</div>
+      {/* ===== STICKY CONTROLS ===== */}
+      <div style={{ borderBottom: `1px solid ${t.border}`, background: dark ? "rgba(17,24,39,0.95)" : "rgba(243,244,246,0.95)", backdropFilter: "blur(12px)", position: "sticky", top: 52, zIndex: 90, padding: "12px 20px" }}>
+        <div style={{ maxWidth: 1400, margin: "0 auto", display: "flex", flexWrap: "wrap", gap: 14, alignItems: "flex-end" }}>
+
+          {/* 포트폴리오 선택 */}
+          <div style={{ flex: "1 1 auto" }}>
+            <div style={{ fontSize: 10, color: t.textDim, marginBottom: 5, fontWeight: 600, letterSpacing: "0.5px" }}>포트폴리오</div>
+            <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+              {THEORY_PORTFOLIOS.map(p => (
+                <Chip key={p.id} active={selectedPortfolios.includes(p.id)} color={p.color} onClick={() => togglePortfolio(p.id)}>
+                  {p.name}
+                </Chip>
+              ))}
+              {customPortfolios.map(p => (
+                <Chip key={p.id} active={selectedPortfolios.includes(p.id)} color={p.color} onClick={() => togglePortfolio(p.id)} onRemove={() => removeCustom(p.id)}>
+                  {p.name}
+                </Chip>
+              ))}
+              <div onClick={() => setShowModal(true)} style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "5px 12px", borderRadius: 20, border: `1px dashed ${t.border}`, color: t.textDim, fontSize: 12, cursor: "pointer" }}>+ 맞춤형 추가</div>
             </div>
-          ))}
-        </div>
+          </div>
 
-        {/* ========== TABS ========== */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-          <TabButton active={activeTab === "integrated_rs"} onClick={() => setActiveTab("integrated_rs")}>📊 종합 RS</TabButton>
-          <TabButton active={activeTab === "sector_rs"} onClick={() => setActiveTab("sector_rs")}>🏭 섹터 RS</TabButton>
-          <TabButton active={activeTab === "momentum"} onClick={() => setActiveTab("momentum")}>🚀 모멘텀 스캐너</TabButton>
-          <TabButton active={activeTab === "heatmap"} onClick={() => setActiveTab("heatmap")}>🗺️ RS 히트맵</TabButton>
-        </div>
+          {/* 구분선 */}
+          <div style={{ width: 1, height: 32, background: t.border, flexShrink: 0 }} />
 
-        {/* ========== TAB: 종합 RS ========== */}
-        {activeTab === "integrated_rs" && (
-          <div style={{ animation: "fadeInUp 0.4s ease" }}>
-            {/* Search + Filters */}
-            <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
-              <div style={{ position: "relative", flex: "0 1 300px" }}>
-                <input
-                  type="text"
-                  placeholder="종목명 검색..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  style={{ width: "100%", padding: "10px 16px 10px 40px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, color: "#fff", fontSize: 14, fontFamily: "'Pretendard', sans-serif", outline: "none" }}
-                />
-                <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#6B7280", fontSize: 16 }}>🔍</span>
-              </div>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                <FilterChip active={rsFilter === "all"} onClick={() => setRsFilter("all")}>전체</FilterChip>
-                <FilterChip active={rsFilter === "rs80"} onClick={() => setRsFilter("rs80")}>RS 80+</FilterChip>
-                <FilterChip active={rsFilter === "rs60"} onClick={() => setRsFilter("rs60")}>RS 60+</FilterChip>
-                <FilterChip active={rsFilter === "newHigh"} onClick={() => setRsFilter("newHigh")}>52주 신고가</FilterChip>
-                <FilterChip active={rsFilter === "rising"} onClick={() => setRsFilter("rising")}>상승 모멘텀</FilterChip>
-              </div>
+          {/* 기간 */}
+          <div>
+            <div style={{ fontSize: 10, color: t.textDim, marginBottom: 5, fontWeight: 600, letterSpacing: "0.5px" }}>기간</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <input type="text" value={startDate} onChange={e => setStartDate(e.target.value)} style={{ width: 72, fontSize: 11 }} />
+              <span style={{ color: t.textDim }}>~</span>
+              <input type="text" value={endDate} onChange={e => setEndDate(e.target.value)} style={{ width: 72, fontSize: 11 }} />
             </div>
+          </div>
 
-            {/* Sector Filter */}
-            <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
-              <FilterChip active={selectedSector === "전체"} onClick={() => setSelectedSector("전체")}>전체 섹터</FilterChip>
-              {SECTORS.map((s) => (
-                <FilterChip key={s.id} active={selectedSector === s.id} onClick={() => setSelectedSector(s.id)}>
-                  {s.icon} {s.id}
-                </FilterChip>
+          <div style={{ width: 1, height: 32, background: t.border, flexShrink: 0 }} />
+
+          {/* 리밸런싱 */}
+          <div>
+            <div style={{ fontSize: 10, color: t.textDim, marginBottom: 5, fontWeight: 600, letterSpacing: "0.5px" }}>리밸런싱</div>
+            <div style={{ display: "flex", gap: 3 }}>
+              {[["monthly", "월별"], ["quarterly", "분기별"], ["yearly", "연별"]].map(([k, v]) => (
+                <TabBtn key={k} active={rebalance === k} onClick={() => setRebalance(k)}>{v}</TabBtn>
               ))}
             </div>
-
-            {/* Results count */}
-            <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 12, fontWeight: 600 }}>
-              총 <span style={{ color: "#00E5A0" }}>{filteredStocks.length}</span>개 종목
-            </div>
-
-            {/* TABLE */}
-            <div style={{ overflowX: "auto", borderRadius: 14, border: "1px solid rgba(255,255,255,0.05)", background: "rgba(255,255,255,0.01)" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1100 }}>
-                <thead>
-                  <tr style={{ background: "rgba(255,255,255,0.03)" }}>
-                    <th style={{ padding: "12px 8px", textAlign: "center", fontSize: 11, color: "#6B7280", fontWeight: 700, width: 50, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>#</th>
-                    <SortHeader label="종목명" field="name" width={160} align="left" />
-                    <th style={{ padding: "12px 8px", textAlign: "left", fontSize: 11, color: "#6B7280", fontWeight: 700, width: 90, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>섹터</th>
-                    <SortHeader label="현재가" field="price" width={100} />
-                    <SortHeader label="등락률" field="change" width={80} />
-                    <th style={{ padding: "12px 8px", textAlign: "center", fontSize: 11, color: "#6B7280", fontWeight: 700, width: 120, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>60일 차트</th>
-                    <SortHeader label="종합RS" field="integratedRS" width={70} />
-                    <SortHeader label="1W" field="rs1w" width={50} />
-                    <SortHeader label="1M" field="rs1m" width={50} />
-                    <SortHeader label="3M" field="rs3m" width={50} />
-                    <SortHeader label="6M" field="rs6m" width={50} />
-                    <SortHeader label="1Y" field="rs1y" width={50} />
-                    <th style={{ padding: "12px 8px", textAlign: "center", fontSize: 11, color: "#6B7280", fontWeight: 700, width: 80, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>RS 추이</th>
-                    <th style={{ padding: "12px 8px", textAlign: "center", fontSize: 11, color: "#6B7280", fontWeight: 700, width: 60, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>신호</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paginatedStocks.map((stock, i) => (
-                    <tr
-                      key={stock.id}
-                      onClick={() => setSelectedStock(selectedStock?.id === stock.id ? null : stock)}
-                      style={{ cursor: "pointer", borderBottom: "1px solid rgba(255,255,255,0.03)", transition: "background 0.15s", animation: `fadeInUp ${0.1 + i * 0.02}s ease` }}
-                    >
-                      <td style={{ padding: "10px 8px", textAlign: "center", fontSize: 12, color: stock.rsRank <= 10 ? "#00E5A0" : "#6B7280", fontWeight: 800, fontFamily: "'JetBrains Mono', monospace" }}>
-                        {stock.rsRank}
-                      </td>
-                      <td style={{ padding: "10px 8px", textAlign: "left" }}>
-                        <div style={{ fontWeight: 700, fontSize: 13, color: "#fff" }}>{stock.name}</div>
-                        <div style={{ fontSize: 10, color: "#4B5563", marginTop: 2 }}>시총 {stock.marketCap}억</div>
-                      </td>
-                      <td style={{ padding: "10px 8px" }}>
-                        <span style={{ fontSize: 11, color: stock.sectorColor, fontWeight: 600, background: `${stock.sectorColor}15`, padding: "2px 8px", borderRadius: 4 }}>
-                          {stock.sectorIcon} {stock.sector}
-                        </span>
-                      </td>
-                      <td style={{ padding: "10px 8px", textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, fontSize: 13, color: "#fff" }}>
-                        {stock.price.toLocaleString()}
-                      </td>
-                      <td style={{ padding: "10px 8px", textAlign: "right" }}>
-                        <ChangeIndicator value={stock.change} />
-                      </td>
-                      <td style={{ padding: "10px 4px", textAlign: "center" }}>
-                        <MiniChart data={stock.priceHistory} color={stock.change >= 0 ? "#00E5A0" : "#FF6B6B"} />
-                      </td>
-                      <td style={{ padding: "10px 8px", textAlign: "center" }}>
-                        <RSBadge value={stock.integratedRS} size="md" />
-                      </td>
-                      <td style={{ padding: "10px 4px", textAlign: "center" }}><RSBadge value={stock.rs1w} size="sm" /></td>
-                      <td style={{ padding: "10px 4px", textAlign: "center" }}><RSBadge value={stock.rs1m} size="sm" /></td>
-                      <td style={{ padding: "10px 4px", textAlign: "center" }}><RSBadge value={stock.rs3m} size="sm" /></td>
-                      <td style={{ padding: "10px 4px", textAlign: "center" }}><RSBadge value={stock.rs6m} size="sm" /></td>
-                      <td style={{ padding: "10px 4px", textAlign: "center" }}><RSBadge value={stock.rs1y} size="sm" /></td>
-                      <td style={{ padding: "10px 4px", textAlign: "center" }}>
-                        <MiniRSChart data={stock.rsHistory} />
-                      </td>
-                      <td style={{ padding: "10px 4px", textAlign: "center" }}>
-                        <div style={{ display: "flex", gap: 3, justifyContent: "center" }}>
-                          {stock.newHigh52w && <span title="52주 신고가" style={{ fontSize: 12 }}>🔥</span>}
-                          {stock.aboveMA20 && <span title="20MA 위" style={{ fontSize: 10, color: "#00E5A0" }}>●</span>}
-                          {stock.integratedRS >= 80 && stock.change > 2 && <span title="강한 모멘텀" style={{ fontSize: 12 }}>⚡</span>}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {paginatedStocks.length < filteredStocks.length && (
-              <div style={{ textAlign: "center", marginTop: 20 }}>
-                <button onClick={() => setPage(page + 1)} style={{ padding: "10px 32px", background: "rgba(0,229,160,0.1)", border: "1px solid rgba(0,229,160,0.2)", borderRadius: 10, color: "#00E5A0", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'Pretendard', sans-serif" }}>
-                  더 보기 ({filteredStocks.length - paginatedStocks.length}개 남음)
-                </button>
-              </div>
-            )}
-
-            {/* DETAIL PANEL */}
-            {selectedStock && (
-              <div style={{ marginTop: 20, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 16, padding: 24, animation: "fadeInUp 0.3s ease" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, flexWrap: "wrap", gap: 16 }}>
-                  <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <span style={{ fontSize: 28, fontWeight: 900, fontFamily: "'Outfit', sans-serif", color: "#fff" }}>{selectedStock.name}</span>
-                      <RSBadge value={selectedStock.integratedRS} size="lg" />
-                      {selectedStock.newHigh52w && <span style={{ fontSize: 11, color: "#F59E0B", fontWeight: 700, background: "rgba(245,158,11,0.1)", padding: "3px 8px", borderRadius: 6 }}>🔥 52주 신고가</span>}
-                    </div>
-                    <div style={{ fontSize: 13, color: "#6B7280", marginTop: 4 }}>
-                      <span style={{ color: selectedStock.sectorColor }}>{selectedStock.sectorIcon} {selectedStock.sector}</span> · RS 순위 {selectedStock.rsRank}위 · 시총 {selectedStock.marketCap}억
-                    </div>
-                  </div>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 32, fontWeight: 900, fontFamily: "'JetBrains Mono', monospace", color: "#fff" }}>{selectedStock.price.toLocaleString()}</div>
-                    <ChangeIndicator value={selectedStock.change} />
-                  </div>
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 20 }}>
-                  {/* Price Chart */}
-                  <div style={{ background: "rgba(0,0,0,0.2)", borderRadius: 12, padding: 16 }}>
-                    <div style={{ fontSize: 12, color: "#6B7280", fontWeight: 700, marginBottom: 12 }}>60일 주가 추이</div>
-                    <ResponsiveContainer width="100%" height={200}>
-                      <AreaChart data={selectedStock.priceHistory}>
-                        <defs>
-                          <linearGradient id="detailGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor={selectedStock.change >= 0 ? "#00E5A0" : "#FF6B6B"} stopOpacity={0.3} />
-                            <stop offset="100%" stopColor={selectedStock.change >= 0 ? "#00E5A0" : "#FF6B6B"} stopOpacity={0} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                        <XAxis dataKey="day" tick={false} axisLine={{ stroke: "rgba(255,255,255,0.06)" }} />
-                        <YAxis tick={{ fill: "#4B5563", fontSize: 10 }} axisLine={false} tickLine={false} domain={["dataMin", "dataMax"]} tickFormatter={(v) => `${(v/1000).toFixed(0)}K`} />
-                        <Tooltip contentStyle={{ background: "#1a1f2e", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 12 }} formatter={(v) => [v.toLocaleString() + "원", "주가"]} />
-                        <Area type="monotone" dataKey="price" stroke={selectedStock.change >= 0 ? "#00E5A0" : "#FF6B6B"} strokeWidth={2} fill="url(#detailGrad)" dot={false} />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-
-                  {/* RS Radar */}
-                  <div style={{ background: "rgba(0,0,0,0.2)", borderRadius: 12, padding: 16 }}>
-                    <div style={{ fontSize: 12, color: "#6B7280", fontWeight: 700, marginBottom: 12 }}>기간별 RS 분석</div>
-                    <ResponsiveContainer width="100%" height={200}>
-                      <RadarChart data={[
-                        { period: "1W", rs: selectedStock.rs1w },
-                        { period: "1M", rs: selectedStock.rs1m },
-                        { period: "3M", rs: selectedStock.rs3m },
-                        { period: "6M", rs: selectedStock.rs6m },
-                        { period: "1Y", rs: selectedStock.rs1y },
-                      ]}>
-                        <PolarGrid stroke="rgba(255,255,255,0.08)" />
-                        <PolarAngleAxis dataKey="period" tick={{ fill: "#8A8F98", fontSize: 11 }} />
-                        <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} />
-                        <Radar dataKey="rs" stroke="#A78BFA" fill="#A78BFA" fillOpacity={0.2} strokeWidth={2} />
-                      </RadarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                {/* Trend Signals */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginTop: 16 }}>
-                  {[
-                    { label: "20일 이평선", value: selectedStock.aboveMA20 ? "상위" : "하위", good: selectedStock.aboveMA20 },
-                    { label: "60일 이평선", value: selectedStock.aboveMA60 ? "상위" : "하위", good: selectedStock.aboveMA60 },
-                    { label: "120일 이평선", value: selectedStock.aboveMA120 ? "상위" : "하위", good: selectedStock.aboveMA120 },
-                    { label: "추세 점수", value: `${selectedStock.trendScore}/100`, good: selectedStock.trendScore >= 60 },
-                    { label: "거래량", value: `${(selectedStock.volume / 10000).toFixed(0)}만주`, good: selectedStock.volume > 1000000 },
-                  ].map((sig, i) => (
-                    <div key={i} style={{ background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: "12px 14px", border: `1px solid ${sig.good ? "rgba(0,229,160,0.15)" : "rgba(255,255,255,0.04)"}` }}>
-                      <div style={{ fontSize: 10, color: "#6B7280", fontWeight: 600, marginBottom: 4 }}>{sig.label}</div>
-                      <div style={{ fontSize: 15, fontWeight: 800, color: sig.good ? "#00E5A0" : "#FF6B6B", fontFamily: "'JetBrains Mono', monospace" }}>{sig.value}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
-        )}
 
-        {/* ========== TAB: 섹터 RS ========== */}
-        {activeTab === "sector_rs" && (
-          <div style={{ animation: "fadeInUp 0.4s ease" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 16 }}>
-              {sectorData.map((sector, i) => {
-                const sectorStocks = stocks.filter((s) => s.sector === sector.id).sort((a, b) => b.integratedRS - a.integratedRS).slice(0, 5);
-                return (
-                  <div key={sector.id} style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: 16, padding: 20, animation: `slideIn ${0.2 + i * 0.08}s ease`, position: "relative", overflow: "hidden" }}>
-                    <div style={{ position: "absolute", top: 0, right: 0, width: 80, height: 80, background: `radial-gradient(circle, ${sector.color}10, transparent)` }} />
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                      <div>
-                        <div style={{ fontSize: 18, fontWeight: 800, fontFamily: "'Outfit', sans-serif", color: "#fff" }}>
-                          {sector.icon} {sector.id}
-                        </div>
-                        <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2 }}>
-                          주도주 {sector.leadingStocks}개 · {sector.momentum}
-                        </div>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <RSBadge value={sector.rs} size="lg" />
-                        <div style={{ marginTop: 6 }}>
-                          <ChangeIndicator value={sector.change1w} />
-                        </div>
-                      </div>
-                    </div>
-                    <div style={{ borderTop: "1px solid rgba(255,255,255,0.05)", paddingTop: 12 }}>
-                      <div style={{ fontSize: 10, color: "#6B7280", fontWeight: 700, marginBottom: 8, letterSpacing: "0.5px" }}>TOP 5 종목</div>
-                      {sectorStocks.map((s, j) => (
-                        <div key={s.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: j < 4 ? "1px solid rgba(255,255,255,0.03)" : "none" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <span style={{ fontSize: 10, color: j < 3 ? "#00E5A0" : "#6B7280", fontWeight: 800, fontFamily: "'JetBrains Mono', monospace", width: 16 }}>{j + 1}</span>
-                            <span style={{ fontSize: 12, fontWeight: 600, color: "#E5E7EB" }}>{s.name}</span>
-                          </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                            <ChangeIndicator value={s.change} />
-                            <RSBadge value={s.integratedRS} size="sm" />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
+          <div style={{ width: 1, height: 32, background: t.border, flexShrink: 0 }} />
+
+          {/* 환헤지 */}
+          <div>
+            <div style={{ fontSize: 10, color: t.textDim, marginBottom: 5, fontWeight: 600, letterSpacing: "0.5px" }}>환헤지 (해외자산)</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontSize: 10, color: t.textDim }}>0%</span>
+              <input type="range" min="0" max="100" step="10" value={hedgeRatio} onChange={e => setHedgeRatio(Number(e.target.value))} style={{ width: 80 }} />
+              <span style={{ fontSize: 10, color: t.textDim }}>100%</span>
+              <span style={{ fontSize: 12, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: t.accent, minWidth: 32 }}>{hedgeRatio}%</span>
+              <span style={{ fontSize: 10, color: t.warning, background: dark ? "rgba(245,158,11,0.1)" : "rgba(217,119,6,0.08)", padding: "2px 6px", borderRadius: 4, fontWeight: 600 }}>비용 {hedgeCost}%</span>
             </div>
           </div>
-        )}
-
-        {/* ========== TAB: 모멘텀 스캐너 ========== */}
-        {activeTab === "momentum" && (
-          <div style={{ animation: "fadeInUp 0.4s ease" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24 }}>
-              {/* RS Rising Stars */}
-              <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: 16, padding: 20 }}>
-                <div style={{ fontSize: 16, fontWeight: 800, color: "#fff", fontFamily: "'Outfit', sans-serif", marginBottom: 4 }}>🌟 RS 급등주</div>
-                <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 16 }}>RS가 빠르게 상승하는 종목</div>
-                {stocks.filter((s) => s.integratedRS >= 70 && s.change > 0).sort((a, b) => b.change - a.change).slice(0, 8).map((s, i) => (
-                  <div key={s.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ fontSize: 16, fontWeight: 900, color: "#00E5A0", fontFamily: "'JetBrains Mono', monospace", width: 24 }}>{i + 1}</span>
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: 13, color: "#fff" }}>{s.name}</div>
-                        <div style={{ fontSize: 10, color: s.sectorColor }}>{s.sectorIcon} {s.sector}</div>
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <MiniChart data={s.priceHistory} color="#00E5A0" width={80} height={30} />
-                      <RSBadge value={s.integratedRS} />
-                      <ChangeIndicator value={s.change} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* New Highs */}
-              <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: 16, padding: 20 }}>
-                <div style={{ fontSize: 16, fontWeight: 800, color: "#fff", fontFamily: "'Outfit', sans-serif", marginBottom: 4 }}>🔥 52주 신고가</div>
-                <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 16 }}>가장 강한 추세를 보이는 종목</div>
-                {stocks.filter((s) => s.newHigh52w).sort((a, b) => b.integratedRS - a.integratedRS).slice(0, 8).map((s, i) => (
-                  <div key={s.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ fontSize: 16, fontWeight: 900, color: "#F59E0B", fontFamily: "'JetBrains Mono', monospace", width: 24 }}>{i + 1}</span>
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: 13, color: "#fff" }}>{s.name}</div>
-                        <div style={{ fontSize: 10, color: s.sectorColor }}>{s.sectorIcon} {s.sector}</div>
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <MiniChart data={s.priceHistory} color="#F59E0B" width={80} height={30} />
-                      <RSBadge value={s.integratedRS} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Volume Leaders */}
-            <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: 16, padding: 20 }}>
-              <div style={{ fontSize: 16, fontWeight: 800, color: "#fff", fontFamily: "'Outfit', sans-serif", marginBottom: 4 }}>📈 거래량 상위 + 고RS</div>
-              <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 16 }}>거래량이 많고 RS가 높은 종목 (기관/외국인 수급 가능성)</div>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={stocks.filter((s) => s.integratedRS >= 50).sort((a, b) => b.volume - a.volume).slice(0, 15).map((s) => ({ name: s.name, volume: Math.round(s.volume / 10000), rs: s.integratedRS, color: s.sectorColor }))}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                  <XAxis dataKey="name" tick={{ fill: "#8A8F98", fontSize: 10 }} angle={-35} textAnchor="end" height={60} />
-                  <YAxis tick={{ fill: "#4B5563", fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ background: "#1a1f2e", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 12 }} formatter={(v, n) => [n === "volume" ? `${v}만주` : v, n === "volume" ? "거래량" : "RS"]} />
-                  <Bar dataKey="volume" radius={[4, 4, 0, 0]}>
-                    {stocks.filter((s) => s.integratedRS >= 50).sort((a, b) => b.volume - a.volume).slice(0, 15).map((s, i) => (
-                      <Cell key={i} fill={s.sectorColor} fillOpacity={0.6} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        )}
-
-        {/* ========== TAB: RS 히트맵 ========== */}
-        {activeTab === "heatmap" && (
-          <div style={{ animation: "fadeInUp 0.4s ease" }}>
-            <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 16, fontWeight: 600 }}>
-              셀 크기 = 시가총액 비중 · 색상 = RS 등급 (🟢 80+ / 🔵 60+ / 🟡 40+ / 🔴 40-)
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
-              {SECTORS.map((sector) => {
-                const sectorStocks = stocks.filter((s) => s.sector === sector.id).sort((a, b) => b.marketCap - a.marketCap);
-                return (
-                  <div key={sector.id} style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: 14, padding: 16 }}>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: "#fff", marginBottom: 12, fontFamily: "'Outfit', sans-serif" }}>
-                      {sector.icon} {sector.id}
-                    </div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                      {sectorStocks.map((s) => {
-                        const size = Math.max(50, Math.min(120, s.marketCap / 50 + 40));
-                        const bgColor = s.integratedRS >= 80 ? "rgba(0,229,160,0.25)" : s.integratedRS >= 60 ? "rgba(78,205,196,0.2)" : s.integratedRS >= 40 ? "rgba(245,158,11,0.2)" : "rgba(255,107,107,0.2)";
-                        const borderColor = s.integratedRS >= 80 ? "rgba(0,229,160,0.4)" : s.integratedRS >= 60 ? "rgba(78,205,196,0.35)" : s.integratedRS >= 40 ? "rgba(245,158,11,0.35)" : "rgba(255,107,107,0.35)";
-                        return (
-                          <div
-                            key={s.id}
-                            onClick={() => { setSelectedStock(s); setActiveTab("integrated_rs"); }}
-                            style={{ width: size, height: size * 0.65, background: bgColor, border: `1px solid ${borderColor}`, borderRadius: 8, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "transform 0.15s", padding: 4 }}
-                            onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.08)")}
-                            onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
-                          >
-                            <div style={{ fontSize: Math.max(8, size / 12), fontWeight: 700, color: "#fff", textAlign: "center", lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "90%" }}>{s.name}</div>
-                            <div style={{ fontSize: Math.max(8, size / 14), fontWeight: 800, fontFamily: "'JetBrains Mono', monospace", color: s.integratedRS >= 80 ? "#00E5A0" : s.integratedRS >= 60 ? "#4ECDC4" : s.integratedRS >= 40 ? "#F59E0B" : "#FF6B6B" }}>
-                              {s.integratedRS}
-                            </div>
-                            <ChangeIndicator value={s.change} />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* ========== FOOTER ========== */}
-        <footer style={{ marginTop: 40, padding: "20px 0", borderTop: "1px solid rgba(255,255,255,0.04)", textAlign: "center" }}>
-          <div style={{ fontSize: 11, color: "#4B5563" }}>
-            ⚠️ 본 서비스는 시뮬레이션 데이터로 구성되어 있으며, 투자 조언이 아닙니다. 투자의 책임은 본인에게 있습니다.
-          </div>
-          <div style={{ fontSize: 10, color: "#374151", marginTop: 6 }}>
-            © 2026 StockPulse RS Analyzer · Built with 💚
-          </div>
-        </footer>
+        </div>
       </div>
+
+      {/* ===== RESULTS ===== */}
+      <div style={{ maxWidth: 1400, margin: "0 auto", padding: "20px" }}>
+
+        {activePortfolios.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "80px 0", color: t.textMuted }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>📊</div>
+            <div style={{ fontSize: 16, fontWeight: 600 }}>포트폴리오를 선택해주세요</div>
+            <div style={{ fontSize: 13, marginTop: 6 }}>위에서 비교할 포트폴리오를 클릭하세요</div>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 16, animation: "fadeIn 0.4s ease" }}>
+
+            {/* 메트릭 카드 */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 }}>
+              {firstResult && <>
+                <MetricCard label={`CAGR (${firstActive.name})`} value={`${firstResult.cagr > 0 ? "+" : ""}${firstResult.cagr}%`} color={firstResult.cagr >= 0 ? t.accent : t.danger} sub={activePortfolios[1] ? `vs ${activePortfolios[1].name} ${results[activePortfolios[1].id]?.cagr}%` : ""} />
+                <MetricCard label="최대 낙폭 (MDD)" value={`${firstResult.mdd}%`} color={t.danger} sub={firstResult.data.find(d => d.dd === firstResult.mdd)?.date || ""} />
+                <MetricCard label="샤프 비율" value={firstResult.sharpe.toFixed(2)} sub={activePortfolios[1] ? `vs ${results[activePortfolios[1].id]?.sharpe.toFixed(2)}` : ""} />
+                <MetricCard label="누적 수익률" value={`${firstResult.totalReturn > 0 ? "+" : ""}${firstResult.totalReturn}%`} color={firstResult.totalReturn >= 0 ? t.accent : t.danger} sub={`${Math.round(months.length / 12)}년간`} />
+                <MetricCard label="연간 변동성" value={`${firstResult.annualVol}%`} color={t.warning} />
+              </>}
+            </div>
+
+            {/* 차트 탭 */}
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+              {[["cumulative", "누적 수익률"], ["mdd", "MDD"], ["yearly", "연도별"], ["allocation", "자산 배분"]].map(([k, v]) => (
+                <TabBtn key={k} active={chartTab === k} onClick={() => setChartTab(k)}>{v}</TabBtn>
+              ))}
+              <div style={{ flex: 1 }} />
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: t.textMuted, cursor: "pointer" }}>
+                <input type="checkbox" checked={showAnnotations} onChange={e => setShowAnnotations(e.target.checked)} />
+                이벤트 주석
+              </label>
+            </div>
+
+            {/* 차트 영역 */}
+            <div style={{ background: t.bgCard, borderRadius: 14, padding: 20, border: `1px solid ${t.border}` }}>
+
+              {chartTab === "cumulative" && (
+                <ResponsiveContainer width="100%" height={340}>
+                  <LineChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                    <CartesianGrid stroke={t.border} strokeDasharray="3 3" />
+                    <XAxis dataKey="date" tick={{ fill: t.textDim, fontSize: 10 }} tickLine={false} axisLine={{ stroke: t.border }} interval={Math.floor(chartData.length / 8)} />
+                    <YAxis tick={{ fill: t.textDim, fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}K`} />
+                    <Tooltip contentStyle={{ background: t.bgCard, border: `1px solid ${t.border}`, borderRadius: 8, fontSize: 12, color: t.text }} formatter={(v, n) => [`${Number(v).toLocaleString()}원`, allPortfolios.find(p => n === `${p.id}_val`)?.name || n]} />
+                    {activePortfolios.map(p => (
+                      <Line key={p.id} type="monotone" dataKey={`${p.id}_val`} stroke={p.color} strokeWidth={2} dot={false} name={`${p.id}_val`} />
+                    ))}
+                    {showAnnotations && annotations.map((ann, i) => {
+                      const idx = chartData.findIndex(d => d.date === ann.date);
+                      if (idx < 0) return null;
+                      return <Line key={`ann-${i}`} type="monotone" dataKey={() => null} stroke="transparent" />;
+                    })}
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+
+              {chartTab === "mdd" && (
+                <ResponsiveContainer width="100%" height={340}>
+                  <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                    <CartesianGrid stroke={t.border} strokeDasharray="3 3" />
+                    <XAxis dataKey="date" tick={{ fill: t.textDim, fontSize: 10 }} tickLine={false} axisLine={{ stroke: t.border }} interval={Math.floor(chartData.length / 8)} />
+                    <YAxis tick={{ fill: t.textDim, fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={v => `${v}%`} />
+                    <Tooltip contentStyle={{ background: t.bgCard, border: `1px solid ${t.border}`, borderRadius: 8, fontSize: 12, color: t.text }} formatter={(v) => [`${v}%`, "MDD"]} />
+                    {activePortfolios.map(p => (
+                      <Area key={p.id} type="monotone" dataKey={`${p.id}_dd`} stroke={p.color} fill={p.color} fillOpacity={0.1} strokeWidth={1.5} dot={false} />
+                    ))}
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
+
+              {chartTab === "yearly" && (
+                <ResponsiveContainer width="100%" height={340}>
+                  <BarChart data={yearlyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                    <CartesianGrid stroke={t.border} strokeDasharray="3 3" />
+                    <XAxis dataKey="year" tick={{ fill: t.textDim, fontSize: 10 }} tickLine={false} axisLine={{ stroke: t.border }} interval={2} />
+                    <YAxis tick={{ fill: t.textDim, fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={v => `${v}%`} />
+                    <Tooltip contentStyle={{ background: t.bgCard, border: `1px solid ${t.border}`, borderRadius: 8, fontSize: 12, color: t.text }} formatter={(v) => [`${v}%`]} />
+                    {activePortfolios.map(p => (
+                      <Bar key={p.id} dataKey={p.id} fill={p.color} radius={[3, 3, 0, 0]} opacity={0.8} />
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+
+              {chartTab === "allocation" && (
+                <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(activePortfolios.length, 3)}, 1fr)`, gap: 20 }}>
+                  {activePortfolios.map(p => (
+                    <div key={p.id} style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8, color: p.color }}>{p.name}</div>
+                      <ResponsiveContainer width="100%" height={200}>
+                        <PieChart>
+                          <Pie data={p.assets.map(a => ({ name: a.name.split("(")[0].trim(), value: a.weight }))} cx="50%" cy="50%" innerRadius={40} outerRadius={70} dataKey="value" stroke={t.bgCard} strokeWidth={2}>
+                            {p.assets.map((a, i) => <Cell key={i} fill={["#3B82F6", "#10B981", "#F59E0B", "#EC4899", "#8B5CF6", "#06B6D4", "#EF4444"][i % 7]} />)}
+                          </Pie>
+                          <Tooltip contentStyle={{ background: t.bgCard, border: `1px solid ${t.border}`, borderRadius: 8, fontSize: 12, color: t.text }} formatter={v => [`${v}%`]} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 4 }}>
+                        {p.assets.map((a, i) => (
+                          <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: t.textMuted }}>
+                            <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                              <span style={{ width: 6, height: 6, borderRadius: "50%", background: ["#3B82F6", "#10B981", "#F59E0B", "#EC4899", "#8B5CF6", "#06B6D4", "#EF4444"][i % 7] }} />
+                              {a.name.split("(")[0].trim()}
+                            </span>
+                            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>{a.weight}%</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* 범례 */}
+              {chartTab !== "allocation" && (
+                <div style={{ display: "flex", gap: 14, marginTop: 12, flexWrap: "wrap" }}>
+                  {activePortfolios.map(p => (
+                    <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: t.textMuted }}>
+                      <span style={{ width: 10, height: 3, borderRadius: 2, background: p.color }} />
+                      {p.name}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 주석 */}
+            <div style={{ background: t.bgCard, borderRadius: 14, padding: 20, border: `1px solid ${t.border}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <span style={{ fontSize: 14, fontWeight: 700 }}>기간별 주석</span>
+                <button onClick={() => setShowAnnotationModal(true)} style={{ background: "transparent", border: `1px dashed ${t.border}`, borderRadius: 6, padding: "4px 12px", color: t.textMuted, fontSize: 12, cursor: "pointer" }}>+ 주석 추가</button>
+              </div>
+              {annotations.map((ann, i) => (
+                <div key={i} style={{ display: "flex", gap: 12, padding: "8px 0", borderBottom: i < annotations.length - 1 ? `1px solid ${t.border}` : "none" }}>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: t.accent, minWidth: 58, flexShrink: 0 }}>{ann.date}</span>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: t.text }}>{ann.label}</div>
+                    <div style={{ fontSize: 12, color: t.textMuted, marginTop: 2 }}>{ann.desc}</div>
+                  </div>
+                  <button onClick={() => setAnnotations(prev => prev.filter((_, j) => j !== i))} style={{ marginLeft: "auto", background: "transparent", border: "none", color: t.textDim, fontSize: 14, cursor: "pointer", flexShrink: 0 }}>✕</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ===== 맞춤형 포트폴리오 모달 ===== */}
+      {showModal && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.6)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setShowModal(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: t.bgCard, borderRadius: 16, padding: 28, width: "90%", maxWidth: 520, border: `1px solid ${t.border}`, maxHeight: "80vh", overflow: "auto" }}>
+            <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 20 }}>맞춤형 포트폴리오 추가</div>
+
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 12, color: t.textMuted, marginBottom: 4 }}>포트폴리오 이름</div>
+              <input type="text" value={editingPortfolio.name} onChange={e => setEditingPortfolio(prev => ({ ...prev, name: e.target.value }))} placeholder="내 포트폴리오" style={{ width: "100%", padding: "8px 12px" }} />
+            </div>
+
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 12, color: t.textMuted, marginBottom: 4 }}>색상</div>
+              <div style={{ display: "flex", gap: 6 }}>
+                {["#D85A30", "#BA7517", "#EC4899", "#8B5CF6", "#06B6D4", "#EF4444", "#10B981"].map(c => (
+                  <div key={c} onClick={() => setEditingPortfolio(prev => ({ ...prev, color: c }))} style={{ width: 24, height: 24, borderRadius: "50%", background: c, cursor: "pointer", border: editingPortfolio.color === c ? `2px solid ${t.text}` : "2px solid transparent" }} />
+                ))}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 12, color: t.textMuted, marginBottom: 8 }}>자산 구성</div>
+              {editingPortfolio.assets.map((asset, i) => (
+                <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 80px 60px 50px 30px", gap: 6, marginBottom: 6, alignItems: "center" }}>
+                  <input type="text" value={asset.name} placeholder="자산명" onChange={e => { const a = [...editingPortfolio.assets]; a[i] = { ...a[i], name: e.target.value }; setEditingPortfolio(prev => ({ ...prev, assets: a })); }} style={{ fontSize: 12 }} />
+                  <input type="text" value={asset.ticker} placeholder="티커" onChange={e => { const a = [...editingPortfolio.assets]; a[i] = { ...a[i], ticker: e.target.value }; setEditingPortfolio(prev => ({ ...prev, assets: a })); }} style={{ fontSize: 12 }} />
+                  <input type="number" value={asset.weight} placeholder="%" onChange={e => { const a = [...editingPortfolio.assets]; a[i] = { ...a[i], weight: Number(e.target.value) }; setEditingPortfolio(prev => ({ ...prev, assets: a })); }} style={{ fontSize: 12 }} />
+                  <select value={asset.type} onChange={e => { const a = [...editingPortfolio.assets]; a[i] = { ...a[i], type: e.target.value }; setEditingPortfolio(prev => ({ ...prev, assets: a })); }} style={{ fontSize: 11, padding: "4px 2px" }}>
+                    <option value="해외">해외</option>
+                    <option value="국내">국내</option>
+                    <option value="비상장">비상장</option>
+                  </select>
+                  <button onClick={() => { const a = editingPortfolio.assets.filter((_, j) => j !== i); setEditingPortfolio(prev => ({ ...prev, assets: a })); }} style={{ background: "transparent", border: "none", color: t.danger, cursor: "pointer", fontSize: 14 }}>✕</button>
+                </div>
+              ))}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
+                <button onClick={() => setEditingPortfolio(prev => ({ ...prev, assets: [...prev.assets, { name: "", ticker: "", weight: 0, type: "해외" }] }))} style={{ background: "transparent", border: `1px dashed ${t.border}`, borderRadius: 6, padding: "5px 14px", color: t.textMuted, fontSize: 12, cursor: "pointer" }}>+ 자산 추가</button>
+                <span style={{ fontSize: 12, color: editingPortfolio.assets.reduce((s, a) => s + a.weight, 0) === 100 ? t.accent : t.danger, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>
+                  합계: {editingPortfolio.assets.reduce((s, a) => s + a.weight, 0)}%
+                </span>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 20 }}>
+              <button onClick={() => setShowModal(false)} style={{ background: "transparent", border: `1px solid ${t.border}`, borderRadius: 8, padding: "8px 20px", color: t.textMuted, fontSize: 13, cursor: "pointer" }}>취소</button>
+              <button onClick={addCustomPortfolio} disabled={!editingPortfolio.name || editingPortfolio.assets.reduce((s, a) => s + a.weight, 0) !== 100} style={{ background: t.accent, border: "none", borderRadius: 8, padding: "8px 20px", color: dark ? "#0A0E17" : "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: (!editingPortfolio.name || editingPortfolio.assets.reduce((s, a) => s + a.weight, 0) !== 100) ? 0.4 : 1 }}>추가</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== 주석 추가 모달 ===== */}
+      {showAnnotationModal && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.6)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setShowAnnotationModal(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: t.bgCard, borderRadius: 16, padding: 28, width: "90%", maxWidth: 400, border: `1px solid ${t.border}` }}>
+            <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 20 }}>주석 추가</div>
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 12, color: t.textMuted, marginBottom: 4 }}>날짜 (YYYY-MM)</div>
+              <input type="text" value={newAnnotation.date} onChange={e => setNewAnnotation(prev => ({ ...prev, date: e.target.value }))} placeholder="2024-01" style={{ width: "100%" }} />
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 12, color: t.textMuted, marginBottom: 4 }}>제목</div>
+              <input type="text" value={newAnnotation.label} onChange={e => setNewAnnotation(prev => ({ ...prev, label: e.target.value }))} placeholder="이벤트 이름" style={{ width: "100%" }} />
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 12, color: t.textMuted, marginBottom: 4 }}>설명</div>
+              <input type="text" value={newAnnotation.desc} onChange={e => setNewAnnotation(prev => ({ ...prev, desc: e.target.value }))} placeholder="간단한 설명" style={{ width: "100%" }} />
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button onClick={() => setShowAnnotationModal(false)} style={{ background: "transparent", border: `1px solid ${t.border}`, borderRadius: 8, padding: "8px 20px", color: t.textMuted, fontSize: 13, cursor: "pointer" }}>취소</button>
+              <button onClick={addAnnotation} style={{ background: t.accent, border: "none", borderRadius: 8, padding: "8px 20px", color: dark ? "#0A0E17" : "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>추가</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== FOOTER ===== */}
+      <footer style={{ maxWidth: 1400, margin: "0 auto", padding: "24px 20px", borderTop: `1px solid ${t.border}`, textAlign: "center" }}>
+        <div style={{ fontSize: 11, color: t.textDim }}>⚠️ 시뮬레이션 데이터 기반. 실제 수익률과 다를 수 있으며 투자 조언이 아닙니다.</div>
+        <div style={{ fontSize: 10, color: t.textDim, marginTop: 4 }}>© 2026 PortfolioLab · Built with 💚</div>
+      </footer>
     </div>
   );
 }
