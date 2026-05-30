@@ -93,16 +93,9 @@ function CalPicker({value,onChange,t}){
 
 const CURRENCIES=[{id:"KRW",sym:"₩",name:"원화"},{id:"USD",sym:"$",name:"달러"},{id:"EUR",sym:"€",name:"유로"},{id:"JPY",sym:"¥",name:"엔화"}];
 
-// Custom bar shape with highlight effect
-function HighlightBar(props){
-  const{x,y,width,height,fill,opacity,isHighlighted}=props;
-  if(!height||height===0)return null;
-  const h=Math.abs(height);const yPos=height<0?y:y;
-  return(<g>
-    {isHighlighted&&<rect x={x-3} y={yPos-2} width={width+6} height={h+4} rx={4} fill="none" stroke="#00E5A0" strokeWidth={2} filter="url(#glow)"/>}
-    <rect x={x} y={yPos} width={width} height={h} rx={2} fill={fill} opacity={opacity||0.85}/>
-  </g>);
-}
+// 천원단위 포맷
+function fmtNum(v){return Number(v).toLocaleString();}
+function fmtShort(v){if(v>=100000000)return`${(v/100000000).toFixed(1)} 억`;if(v>=10000)return`${fmtNum(Math.round(v/10000))} 만`;return fmtNum(v);}
 
 export default function App(){
   const[dark,setDark]=useState(true);const t=dark?DARK:LIGHT;
@@ -121,6 +114,7 @@ export default function App(){
   const[initAmt,setInitAmt]=useState(10000000);
   const[currency,setCurrency]=useState("KRW");
   const curSym=CURRENCIES.find(c=>c.id===currency)?.sym||"₩";
+  const fmtAmt=v=>`${curSym} ${fmtNum(v)}`;
 
   const secRef={cum:useRef(null),mdd:useRef(null),yearly:useRef(null),alloc:useRef(null)};
   const scrollTo=k=>{secRef[k]?.current?.scrollIntoView({behavior:"smooth",block:"start"});};
@@ -136,7 +130,12 @@ export default function App(){
   const addA=aid=>{if(editP.assets.find(x=>x.a===aid))return;setEditP(p=>({...p,assets:[...p.assets,{a:aid,w:0}]}));setPicker(false);};
   const bmResult=results[benchmark];const bmPort=allP.find(p=>p.id===benchmark);
   const ttStyle={background:t.bgCard,border:`1px solid ${t.border}`,borderRadius:8,fontSize:11,color:t.text};
-  const fmtAmt=v=>`${curSym}${Number(v).toLocaleString()}`;
+
+  // 금액 입력 포맷 (display용)
+  const[amtInput,setAmtInput]=useState(fmtNum(initAmt));
+  const handleAmtChange=e=>{const raw=e.target.value.replace(/[^0-9]/g,"");const num=parseInt(raw)||0;setInitAmt(num);setAmtInput(fmtNum(num));};
+  const handleAmtFocus=()=>setAmtInput(String(initAmt));
+  const handleAmtBlur=()=>setAmtInput(fmtNum(initAmt));
 
   const css=`@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Outfit:wght@300;400;600;800;900&display=swap');*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:${t.border};border-radius:3px}@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}input[type=range]{-webkit-appearance:none;background:${t.border};height:4px;border-radius:2px;outline:none}input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:${t.accent};cursor:pointer}select,input[type=text],input[type=number]{background:${t.bgSurface};border:1px solid ${t.border};color:${t.text};border-radius:6px;padding:6px 10px;font-size:12px;outline:none;font-family:inherit}`;
 
@@ -167,7 +166,7 @@ export default function App(){
             </div>
           </div>
           <div style={{width:1,height:28,background:t.border,flexShrink:0}}/>
-          <div><div style={{fontSize:9,color:t.textDim,marginBottom:4,fontWeight:700}}>투자금액</div><div style={{display:"flex",gap:4,alignItems:"center"}}><select value={currency} onChange={e=>setCurrency(e.target.value)} style={{fontSize:11,padding:"4px 6px",borderRadius:4,width:56}}>{CURRENCIES.map(c=><option key={c.id} value={c.id}>{c.sym} {c.id}</option>)}</select><input type="number" value={initAmt} onChange={e=>setInitAmt(Math.max(1,+e.target.value))} style={{width:100,fontSize:11,textAlign:"right"}}/></div></div>
+          <div><div style={{fontSize:9,color:t.textDim,marginBottom:4,fontWeight:700}}>투자금액</div><div style={{display:"flex",gap:4,alignItems:"center"}}><select value={currency} onChange={e=>setCurrency(e.target.value)} style={{fontSize:11,padding:"4px 6px",borderRadius:4,width:56}}>{CURRENCIES.map(c=><option key={c.id} value={c.id}>{c.sym} {c.id}</option>)}</select><input type="text" value={amtInput} onChange={handleAmtChange} onFocus={handleAmtFocus} onBlur={handleAmtBlur} style={{width:110,fontSize:11,textAlign:"right"}}/></div></div>
           <div style={{width:1,height:28,background:t.border,flexShrink:0}}/>
           <div><div style={{fontSize:9,color:t.textDim,marginBottom:4,fontWeight:700}}>기간</div><div style={{display:"flex",alignItems:"center",gap:4}}><CalPicker value={startD} onChange={setStartD} t={t}/><span style={{color:t.textDim,fontSize:11}}>~</span><CalPicker value={endD} onChange={setEndD} t={t}/></div></div>
           <div style={{width:1,height:28,background:t.border,flexShrink:0}}/>
@@ -185,13 +184,13 @@ export default function App(){
         {!activeP.length?(<div style={{textAlign:"center",padding:"60px 0",color:t.textMuted}}><div style={{fontSize:36,marginBottom:10}}>📊</div><div style={{fontSize:15,fontWeight:600}}>포트폴리오를 선택해주세요</div></div>):(
         <div style={{display:"flex",flexDirection:"column",gap:20,animation:"fadeIn .4s ease"}}>
 
-          {/* 누적 수익률 - 기본 % */}
+          {/* 누적 수익률 */}
           <div ref={secRef.cum} style={{background:t.bgCard,borderRadius:12,padding:16,border:`1px solid ${t.border}`,scrollMarginTop:140}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
               <div style={{fontSize:14,fontWeight:700}}>📈 누적 수익률</div>
               <div style={{display:"flex",gap:3}}><Tab active={cumUnit==="pct"} onClick={()=>setCumUnit("pct")}>% 수익률</Tab><Tab active={cumUnit==="amount"} onClick={()=>setCumUnit("amount")}>{curSym} 금액</Tab></div>
             </div>
-            <ResponsiveContainer width="100%" height={360}><LineChart data={chartData} margin={{top:5,right:5,left:10,bottom:0}}><CartesianGrid stroke={t.border} strokeDasharray="3 3"/><XAxis dataKey="date" tick={{fill:t.textDim,fontSize:10}} tickLine={false} axisLine={{stroke:t.border}} interval={Math.floor(chartData.length/8)}/><YAxis tick={{fill:t.textDim,fontSize:10}} tickLine={false} axisLine={false} tickFormatter={cumUnit==="pct"?v=>`${v}%`:v=>{if(v>=100000000)return`${(v/100000000).toFixed(1)}억`;if(v>=10000)return`${(v/10000).toFixed(0)}만`;return v.toLocaleString();}}/><Tooltip contentStyle={ttStyle} formatter={(v,n)=>{const p=allP.find(x=>cumUnit==="pct"?n===`${x.id}_p`:n===`${x.id}_v`);return[cumUnit==="pct"?`${v}%`:fmtAmt(v),p?.name||""];}}/>{activeP.map(p=><Line key={p.id} type="monotone" dataKey={cumUnit==="pct"?`${p.id}_p`:`${p.id}_v`} stroke={p.color} strokeWidth={1.8} dot={false}/>)}</LineChart></ResponsiveContainer>
+            <ResponsiveContainer width="100%" height={360}><LineChart data={chartData} margin={{top:5,right:5,left:10,bottom:0}}><CartesianGrid stroke={t.border} strokeDasharray="3 3"/><XAxis dataKey="date" tick={{fill:t.textDim,fontSize:10}} tickLine={false} axisLine={{stroke:t.border}} interval={Math.floor(chartData.length/8)}/><YAxis tick={{fill:t.textDim,fontSize:10}} tickLine={false} axisLine={false} tickFormatter={cumUnit==="pct"?v=>`${v}%`:v=>fmtShort(v)}/><Tooltip contentStyle={ttStyle} formatter={(v,n)=>{const p=allP.find(x=>cumUnit==="pct"?n===`${x.id}_p`:n===`${x.id}_v`);return[cumUnit==="pct"?`${v}%`:fmtAmt(v),p?.name||""];}}/>{activeP.map(p=><Line key={p.id} type="monotone" dataKey={cumUnit==="pct"?`${p.id}_p`:`${p.id}_v`} stroke={p.color} strokeWidth={1.8} dot={false}/>)}</LineChart></ResponsiveContainer>
             <div style={{display:"flex",gap:12,marginTop:10,flexWrap:"wrap"}}>{activeP.map(p=><div key={p.id} style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:t.textMuted}}><span style={{width:10,height:3,borderRadius:2,background:p.color}}/>{p.name} → {fmtAmt(results[p.id]?.finalVal||0)}</div>)}</div>
           </div>
 
@@ -205,7 +204,7 @@ export default function App(){
                   <td style={{padding:"10px",display:"flex",alignItems:"center",gap:6}}><span style={{width:8,height:8,borderRadius:"50%",background:p.color}}/><span style={{fontWeight:600}}>{p.name}</span>{isBm&&<span style={{fontSize:9,padding:"1px 5px",borderRadius:3,background:t.accent,color:t.bg,fontWeight:700}}>기준</span>}</td>
                   <td style={{padding:"10px",textAlign:"right",fontFamily:"'JetBrains Mono',monospace",fontWeight:600}}>{fmtAmt(r.finalVal)}</td>
                   <td style={{padding:"10px",textAlign:"right",fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:r.cagr>=0?t.accent:t.danger}}>{r.cagr>0?"+":""}{r.cagr}%</td>
-                  <td style={{padding:"10px",textAlign:"right",fontFamily:"'JetBrains Mono',monospace",color:r.totalRet>=0?t.accent:t.danger}}>{r.totalRet>0?"+":""}{r.totalRet}%</td>
+                  <td style={{padding:"10px",textAlign:"right",fontFamily:"'JetBrains Mono',monospace",color:r.totalRet>=0?t.accent:t.danger}}>{r.totalRet>0?"+":""}{fmtNum(r.totalRet)}%</td>
                   <td style={{padding:"10px",textAlign:"right",fontFamily:"'JetBrains Mono',monospace",color:t.danger}}>{r.mdd}%</td>
                   <td style={{padding:"10px",textAlign:"right",fontFamily:"'JetBrains Mono',monospace"}}>{r.sharpe}</td>
                   <td style={{padding:"10px",textAlign:"right",fontFamily:"'JetBrains Mono',monospace",color:t.warning}}>{r.vol}%</td>
@@ -221,7 +220,7 @@ export default function App(){
             <div style={{display:"flex",gap:12,marginTop:10,flexWrap:"wrap"}}>{activeP.map(p=><div key={p.id} style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:t.textMuted}}><span style={{width:10,height:3,borderRadius:2,background:p.color}}/>{p.name} ({results[p.id]?.mdd}%)</div>)}</div>
           </div>
 
-          {/* 연도별 자산 */}
+          {/* 연도별 자산 - 클릭 시 테두리/그림자 효과, 커서 없음 */}
           <div ref={secRef.yearly} style={{background:t.bgCard,borderRadius:12,padding:16,border:`1px solid ${t.border}`,scrollMarginTop:140}}>
             <div style={{fontSize:14,fontWeight:700,marginBottom:4}}>📊 연도별 자산별 수익률</div>
             <div style={{fontSize:11,color:t.textMuted,marginBottom:12}}>기준: {bmPort?.name||"없음"} · 차트 바를 클릭하면 오른쪽에 상세</div>
@@ -229,15 +228,12 @@ export default function App(){
               <div style={{flex:"1 1 auto",minWidth:0}}>
                 <ResponsiveContainer width="100%" height={360}>
                   <BarChart data={bmResult.yba} margin={{top:5,right:5,left:0,bottom:0}} onClick={e=>{if(e&&e.activeLabel)setSelYear(selYear===e.activeLabel?null:e.activeLabel);}}>
-                    <defs><filter id="glow"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
                     <CartesianGrid stroke={t.border} strokeDasharray="3 3"/>
                     <XAxis dataKey="year" tick={{fill:t.textDim,fontSize:10}} tickLine={false} axisLine={{stroke:t.border}} interval={2}/>
                     <YAxis tick={{fill:t.textDim,fontSize:10}} tickLine={false} axisLine={false} tickFormatter={v=>`${v}%`}/>
                     <Tooltip contentStyle={ttStyle} cursor={false} formatter={(v,name)=>{const a=ga(name);return[`${Number(v).toFixed(1)}%`,a.name];}}/>
                     <ReferenceLine y={0} stroke={t.textDim} strokeWidth={0.5}/>
-                    {bmResult.en.map(a=><Bar key={a.a} dataKey={a.a} stackId="a" cursor="pointer" shape={props=>{const isH=selYear&&props.year===selYear;return<HighlightBar {...props} isHighlighted={isH}/>;}}>
-                      {bmResult.yba.map((entry,idx)=><Cell key={idx} fill={a.color} opacity={0.85}/>)}
-                    </Bar>)}
+                    {bmResult.en.map(a=><Bar key={a.a} dataKey={a.a} stackId="a" fill={a.color} opacity={0.85} cursor="pointer"/>)}
                   </BarChart>
                 </ResponsiveContainer>
                 <div style={{display:"flex",gap:10,marginTop:8,flexWrap:"wrap"}}>{bmResult.en.map(a=><div key={a.a} style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:t.textMuted}}><span style={{width:8,height:8,borderRadius:2,background:a.color}}/>{a.name} ({a.w}%)</div>)}</div>
@@ -254,7 +250,7 @@ export default function App(){
             </div>}
           </div>
 
-          {/* 자산 배분 - 2~3열 그리드 + 도넛 + 에어리어차트 */}
+          {/* 자산 배분 */}
           <div ref={secRef.alloc} style={{background:t.bgCard,borderRadius:12,padding:16,border:`1px solid ${t.border}`,scrollMarginTop:140}}>
             <div style={{fontSize:14,fontWeight:700,marginBottom:12}}>🥧 자산 배분</div>
             <div style={{display:"grid",gridTemplateColumns:activeP.length<=2?"repeat(2,1fr)":"repeat(3,1fr)",gap:16}}>
@@ -262,38 +258,42 @@ export default function App(){
               const pColor=p.color;const lastPct=r.data[r.data.length-1]?.pct||0;
               return(
                 <div key={p.id} style={{background:t.bgSurface,borderRadius:10,padding:14,border:`1px solid ${t.border}`}}>
-                  {/* 상단: 이름 + 기간 + CAGR */}
+                  {/* 상단: 이름 좌측 / 기간+CAGR 우측 */}
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
-                    <div><div style={{fontSize:14,fontWeight:800,color:pColor}}>{p.name}</div><div style={{fontSize:10,color:t.textDim,marginTop:2}}>{startD} ~ {endD}</div></div>
-                    <div style={{textAlign:"right"}}><div style={{fontSize:10,color:t.textDim}}>CAGR</div><div style={{fontSize:16,fontWeight:800,fontFamily:"'JetBrains Mono',monospace",color:r.cagr>=0?t.accent:t.danger}}>{r.cagr>0?"+":""}{r.cagr}%</div></div>
-                  </div>
-                  {/* 중단: 도넛 + 자산목록 */}
-                  <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:10}}>
-                    <div style={{position:"relative",width:120,height:120,flexShrink:0}}>
-                      <ResponsiveContainer width={120} height={120}><PieChart><Pie data={r.en.map(a=>({name:a.name,value:a.w}))} cx="50%" cy="50%" innerRadius={32} outerRadius={52} dataKey="value" stroke={t.bgSurface} strokeWidth={2}>{r.en.map((a,i)=><Cell key={i} fill={a.color}/>)}</Pie><Tooltip contentStyle={ttStyle} formatter={(v,name)=>[`${v}%`,name]}/></PieChart></ResponsiveContainer>
-                      <div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",textAlign:"center",pointerEvents:"none"}}><div style={{fontSize:11,fontWeight:800,fontFamily:"'JetBrains Mono',monospace",color:t.text}}>{fmtAmt(r.finalVal).length>8?`${(r.finalVal/10000).toFixed(0)}만`:fmtAmt(r.finalVal)}</div></div>
+                    <div style={{fontSize:14,fontWeight:800,color:pColor}}>{p.name}</div>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontSize:10,color:t.textDim}}>{startD} ~ {endD}</div>
+                      <div style={{fontSize:9,color:t.textDim,marginTop:1}}>CAGR <span style={{fontSize:14,fontWeight:800,fontFamily:"'JetBrains Mono',monospace",color:r.cagr>=0?t.accent:t.danger}}>{r.cagr>0?"+":""}{r.cagr}%</span></div>
                     </div>
-                    <div style={{display:"flex",flexDirection:"column",gap:2,flex:1,minWidth:0}}>
-                      {r.en.map(a=><div key={a.a} style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:11,color:t.textMuted,gap:6}}>
-                        <span style={{display:"flex",alignItems:"center",gap:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}><span style={{width:5,height:5,borderRadius:"50%",background:a.color,flexShrink:0}}/>{a.name}</span>
-                        <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:600,flexShrink:0}}>{a.w}%</span>
+                  </div>
+                  {/* 중단: 도넛 + 자산목록 (간격 좁게) */}
+                  <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10}}>
+                    <div style={{position:"relative",width:110,height:110,flexShrink:0}}>
+                      <ResponsiveContainer width={110} height={110}><PieChart><Pie data={r.en.map(a=>({name:a.name,value:a.w}))} cx="50%" cy="50%" innerRadius={30} outerRadius={48} dataKey="value" stroke="none" strokeWidth={0}>{r.en.map((a,i)=><Cell key={i} fill={a.color}/>)}</Pie><Tooltip contentStyle={ttStyle} formatter={(v,name)=>[`${v}%`,name]}/></PieChart></ResponsiveContainer>
+                      <div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",textAlign:"center",pointerEvents:"none"}}><div style={{fontSize:11,fontWeight:800,fontFamily:"'JetBrains Mono',monospace",color:t.text}}>{curSym} {fmtShort(r.finalVal)}</div></div>
+                    </div>
+                    <div style={{display:"flex",flexDirection:"column",gap:1,flex:1,minWidth:0}}>
+                      {r.en.map(a=><div key={a.a} style={{display:"flex",alignItems:"center",fontSize:11,color:t.textMuted,gap:4}}>
+                        <span style={{width:5,height:5,borderRadius:"50%",background:a.color,flexShrink:0}}/>
+                        <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{a.name}</span>
+                        <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:600,flexShrink:0,marginLeft:4}}>{a.w}%</span>
                       </div>)}
                     </div>
                   </div>
-                  {/* 하단: 에어리어 차트 */}
+                  {/* 하단: 에어리어 차트 (꽉 차게) */}
                   <div style={{borderTop:`1px solid ${t.border}`,paddingTop:8}}>
-                    <ResponsiveContainer width="100%" height={80}>
-                      <AreaChart data={r.data.filter((_,i)=>i%3===0)} margin={{top:4,right:0,left:0,bottom:0}}>
-                        <defs><linearGradient id={`ag-${p.id}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={pColor} stopOpacity={0.3}/><stop offset="100%" stopColor={pColor} stopOpacity={0}/></linearGradient></defs>
+                    <ResponsiveContainer width="100%" height={70}>
+                      <AreaChart data={r.data.filter((_,i)=>i%3===0)} margin={{top:2,right:0,left:0,bottom:0}}>
+                        <defs><linearGradient id={`ag-${p.id}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={pColor} stopOpacity={0.35}/><stop offset="100%" stopColor={pColor} stopOpacity={0.02}/></linearGradient></defs>
                         <Area type="monotone" dataKey="pct" stroke={pColor} strokeWidth={1.5} fill={`url(#ag-${p.id})`} dot={false}/>
-                        <XAxis dataKey="date" tick={false} axisLine={false} tickLine={false}/>
-                        <YAxis tick={false} axisLine={false} tickLine={false}/>
+                        <XAxis dataKey="date" hide={true}/>
+                        <YAxis hide={true}/>
                         <Tooltip contentStyle={ttStyle} formatter={v=>[`${v}%`,"수익률"]} labelFormatter={l=>l}/>
                       </AreaChart>
                     </ResponsiveContainer>
                     <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:t.textDim,marginTop:2}}>
                       <span>{startD}</span>
-                      <span style={{fontWeight:700,color:lastPct>=0?t.accent:t.danger}}>{lastPct>=0?"+":""}{lastPct}%</span>
+                      <span style={{fontWeight:700,color:lastPct>=0?t.accent:t.danger}}>{lastPct>=0?"+":""}{fmtNum(lastPct)}%</span>
                       <span>{endD}</span>
                     </div>
                   </div>
