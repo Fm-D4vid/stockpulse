@@ -1,9 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, ReferenceLine } from "recharts";
 
-// ============================================================
-// 워커 API 주소 — 배포 후 본인 주소로 변경
-// ============================================================
 const API_URL = "https://portfoliolab-api.david-choi2631.workers.dev";
 
 const DARK={bg:"#0A0E17",bgCard:"#111827",bgSurface:"#1A1F2E",text:"#E5E7EB",textMuted:"#A0A6B2",textDim:"#6B7280",border:"rgba(255,255,255,0.06)",accent:"#00E5A0",accentDark:"#00B87D",danger:"#FF6B6B",warning:"#F59E0B",info:"#3B82F6"};
@@ -44,54 +41,70 @@ const THEORIES=[
 ];
 
 // ============================================================
-// 실제 데이터 기반 백테스트 엔진
+// 실제 데이터 기반 백테스트 엔진 (수정본)
 // ============================================================
+function getMonthlyReturn(realData, assetId, month) {
+  if (assetId === "cash_usd") return 0.003 / 12;
+  if (assetId === "cash_krw") return 0.002 / 12;
+  if (assetId === "kr_reit") return 0.004 / 12;
+  if (!realData[assetId]) return 0;
+  const d = realData[assetId].data;
+  const point = d.find(p => p.date === month);
+  if (!point) return 0;
+  // ret은 소수 형태 (0.05 = 5%)
+  // 비정상 수익률 필터 (월간 ±50% 초과는 이상치)
+  const r = point.ret;
+  if (Math.abs(r) > 0.5) return 0;
+  return r;
+}
+
+function getFxReturn(fxData, month) {
+  if (!fxData) return 0;
+  const point = fxData.find(p => p.date === month);
+  if (!point) return 0;
+  const r = point.ret;
+  if (Math.abs(r) > 0.3) return 0; // 환율 월간 30% 초과는 이상치
+  return r;
+}
+
 function runBacktest(port, months, hr, hc, rebal, initAmt, realData, fxData) {
   const en = port.assets.map(x => ({ ...x, ...ga(x.a) }));
-  const ri = rebal === "monthly" ? 1 : rebal === "quarterly" ? 3 : 12;
   const fw = en.filter(x => x.type === "해외").reduce((s, x) => s + x.w, 0) / 100;
-  const hcm = (hc / 100) * (hr / 100) * fw / 12;
+  // 월간 헤지 비용 = 연간비용 * 헤지비율 / 12
+  const monthlyHedgeCost = (hc / 100) * (hr / 100) / 12;
 
   let tot = initAmt, peak = tot, mdd = 0;
   const data = [], mRet = [], aRetMap = {};
   en.forEach(x => { aRetMap[x.a] = []; });
 
-  months.forEach((month, idx) => {
+  months.forEach((month) => {
+    // 환율 수익률 (이번 달)
+    const fxRet = getFxReturn(fxData, month);
+
     let portRet = 0;
-
     en.forEach(x => {
-      // 실제 수익률 가져오기
-      let r = 0;
-      if (x.a === "cash_usd") r = 0.003 / 12; // 연 0.3% 가정
-      else if (x.a === "cash_krw") r = 0.002 / 12;
-      else if (x.a === "kr_reit") r = 0.005 / 12; // 데이터 없으면 추정
-      else if (realData[x.a]) {
-        const assetData = realData[x.a].data;
-        const point = assetData.find(d => d.date === month);
-        if (point) {
-          r = point.ret;
-        } else {
-          r = 0; // 해당 월 데이터 없으면 0
-        }
-      }
+      const w = x.w / 100;
+      // 자산 자체 수익률 (달러 기준)
+      let assetRet = getMonthlyReturn(realData, x.a, month);
 
-      // 환율 효과 (해외 자산만)
-      if (x.type === "해외" && fxData) {
-        const fxPoint = fxData.find(d => d.date === month);
-        if (fxPoint) {
-          const fxRet = fxPoint.ret;
-          // 헤지 비율에 따라 환율 효과 조절
-          r = r + fxRet * (1 - hr / 100);
-        }
-      }
-
-      // 헤지 비용
+      // 원화 환산 수익률
+      let krwRet;
       if (x.type === "해외") {
-        r -= hcm / fw * (x.w / 100); // 비중 비례 헤지 비용
+        // 해외자산: 달러수익 + 환율효과 (헤지 비율에 따라 조절)
+        // 비헤지 부분만 환율 노출
+        const fxExposure = 1 - (hr / 100);
+        krwRet = assetRet + (fxRet * fxExposure);
+        // 헤지 비용 차감 (해외자산 비중 비례)
+        krwRet -= monthlyHedgeCost;
+      } else {
+        // 국내자산: 환율 무관
+        krwRet = assetRet;
       }
 
-      aRetMap[x.a].push({ month, ret: Math.round(r * 10000) / 100 });
-      portRet += r * (x.w / 100);
+      // 자산별 수익률 기록 (% 단위로 저장)
+      aRetMap[x.a].push({ month, ret: Math.round(krwRet * 10000) / 100 });
+      // 포트폴리오 수익률에 비중 반영
+      portRet += krwRet * w;
     });
 
     tot *= (1 + portRet);
@@ -99,23 +112,28 @@ function runBacktest(port, months, hr, hc, rebal, initAmt, realData, fxData) {
     if (tot > peak) peak = tot;
     const dd = (tot - peak) / peak;
     if (dd < mdd) mdd = dd;
-    data.push({ date: month, value: Math.round(tot), dd: Math.round(dd * 10000) / 100, pct: Math.round((tot / initAmt - 1) * 10000) / 100 });
+    data.push({
+      date: month,
+      value: Math.round(tot),
+      dd: Math.round(dd * 10000) / 100,
+      pct: Math.round((tot / initAmt - 1) * 10000) / 100
+    });
   });
 
   const yrs = months.length / 12;
-  const cagr = yrs > 0 ? (Math.pow(tot / initAmt, 1 / yrs) - 1) * 100 : 0;
+  const cagr = yrs > 0 ? (Math.pow(Math.max(tot, 1) / initAmt, 1 / yrs) - 1) * 100 : 0;
   const avg = mRet.length > 0 ? mRet.reduce((a, b) => a + b, 0) / mRet.length : 0;
-  const vol = mRet.length > 0 ? Math.sqrt(mRet.reduce((a, r) => a + (r - avg) ** 2, 0) / mRet.length) * Math.sqrt(12) * 100 : 0;
+  const vol = mRet.length > 1 ? Math.sqrt(mRet.reduce((a, r) => a + (r - avg) ** 2, 0) / (mRet.length - 1)) * Math.sqrt(12) * 100 : 0;
   const sharpe = vol > 0 ? (cagr - 2) / vol : 0;
 
-  // 연도별 자산별 수익률
+  // 연도별 자산별 수익률 (이미 %단위)
   const yba = {};
   en.forEach(x => {
     aRetMap[x.a].forEach(r => {
       const yr = r.month.split("-")[0];
       if (!yba[yr]) yba[yr] = { year: yr };
       if (!yba[yr][x.a]) yba[yr][x.a] = 0;
-      yba[yr][x.a] += r.ret;
+      yba[yr][x.a] += r.ret; // 월간 % 합산 = 연간 %
     });
   });
   Object.keys(yba).forEach(yr => {
@@ -165,7 +183,7 @@ export default function App(){
   const[dark,setDark]=useState(true);const t=dark?DARK:LIGHT;
   const[sel,setSel]=useState(["allweather","6040"]);
   const[customs,setCustoms]=useState([]);
-  const[startD,setStartD]=useState("2000-01");
+  const[startD,setStartD]=useState("2004-01");
   const[endD,setEndD]=useState("2025-05");
   const[rebal,setRebal]=useState("monthly");
   const[hr,setHr]=useState(50);const[hc]=useState(1.8);
@@ -183,7 +201,6 @@ export default function App(){
   const handleAmtChange=e=>{const raw=e.target.value.replace(/[^0-9]/g,"");const num=parseInt(raw)||0;setInitAmt(num);setAmtInput(fmtNum(num));};
   const handleAmtBlur=()=>setAmtInput(fmtNum(initAmt));
 
-  // 실제 데이터 로딩
   const[realData,setRealData]=useState(null);
   const[loading,setLoading]=useState(true);
   const[dataError,setDataError]=useState(null);
@@ -196,10 +213,9 @@ export default function App(){
         const res=await fetch(`${API_URL}/api/data`);
         if(!res.ok) throw new Error("API 응답 오류");
         const json=await res.json();
-        if(!json.assets) throw new Error("데이터 없음. /api/refresh를 먼저 호출하세요.");
+        if(!json.assets) throw new Error("데이터 없음");
         setRealData(json.assets);
         setDataInfo({updatedAt:json.updatedAt,total:json.totalAssets,available:json.availableAssets});
-        setDataError(null);
       }catch(e){setDataError(e.message);}
       finally{setLoading(false);}
     }
@@ -212,44 +228,31 @@ export default function App(){
   const allP=[...THEORIES,...customs];
   const activeP=allP.filter(p=>sel.includes(p.id));
   const months=useMemo(()=>genMonths(startD,endD),[startD,endD]);
+  const fxData=useMemo(()=>realData?.fx_usdkrw?.data||null,[realData]);
 
-  // 환율 데이터
-  const fxData=useMemo(()=>{
-    if(!realData||!realData.fx_usdkrw) return null;
-    return realData.fx_usdkrw.data;
-  },[realData]);
-
-  // 실제 데이터로 백테스트 실행
   const results=useMemo(()=>{
     if(!realData) return {};
     const r={};
-    activeP.forEach(p=>{
-      r[p.id]=runBacktest(p,months,hr,hc,rebal,initAmt,realData,fxData);
-    });
+    activeP.forEach(p=>{r[p.id]=runBacktest(p,months,hr,hc,rebal,initAmt,realData,fxData);});
     return r;
   },[activeP.map(p=>p.id).join(","),months.length,hr,hc,rebal,initAmt,realData]);
 
-  const chartData=useMemo(()=>{if(!activeP.length||!realData) return[];const first=activeP[0];const base=results[first.id]?.data||[];return base.map((d,i)=>{const pt={date:d.date};activeP.forEach(p=>{const rd=results[p.id]?.data[i];if(rd){pt[`${p.id}_v`]=rd.value;pt[`${p.id}_p`]=rd.pct;pt[`${p.id}_d`]=rd.dd;}});return pt;});},[results,activeP.map(p=>p.id).join(","),realData]);
+  const chartData=useMemo(()=>{if(!activeP.length||!realData) return[];const base=results[activeP[0].id]?.data||[];return base.map((d,i)=>{const pt={date:d.date};activeP.forEach(p=>{const rd=results[p.id]?.data[i];if(rd){pt[`${p.id}_v`]=rd.value;pt[`${p.id}_p`]=rd.pct;pt[`${p.id}_d`]=rd.dd;}});return pt;});},[results,activeP.map(p=>p.id).join(","),realData]);
 
   const toggle=id=>setSel(p=>p.includes(id)?p.filter(x=>x!==id):[...p,id]);
   const addC=()=>{const id="c_"+Date.now();setCustoms(p=>[...p,{...editP,id}]);setSel(p=>[...p,id]);setShowModal(false);setEditP({name:"",color:"#D85A30",assets:[]});};
   const addA=aid=>{if(editP.assets.find(x=>x.a===aid))return;setEditP(p=>({...p,assets:[...p.assets,{a:aid,w:0}]}));setPicker(false);};
   const bmResult=results[benchmark];const bmPort=allP.find(p=>p.id===benchmark);
   const ttStyle={background:t.bgCard,border:`1px solid ${t.border}`,borderRadius:8,fontSize:11,color:t.text};
+  const availableAssets=realData?Object.keys(ASSET_META).filter(id=>realData[id]||["cash_usd","cash_krw","kr_reit"].includes(id)):[];
 
   const css=`@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Outfit:wght@300;400;600;800;900&display=swap');*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:${t.border};border-radius:3px}@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}@keyframes spin{to{transform:rotate(360deg)}}input[type=range]{-webkit-appearance:none;background:${t.border};height:4px;border-radius:2px;outline:none}input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:${t.accent};cursor:pointer}select,input[type=text],input[type=number]{background:${t.bgSurface};border:1px solid ${t.border};color:${t.text};border-radius:6px;padding:6px 10px;font-size:12px;outline:none;font-family:inherit}`;
 
   const Chip=({active,color,children,onClick,onRemove})=>(<div onClick={onClick} style={{display:"inline-flex",alignItems:"center",gap:5,padding:"4px 10px",borderRadius:16,border:`1px solid ${active?color||t.accent:t.border}`,background:active?`${color||t.accent}18`:"transparent",cursor:"pointer",fontSize:12,fontWeight:active?600:400,color:active?t.text:t.textMuted,transition:"all .15s",whiteSpace:"nowrap"}}>{color&&<span style={{width:7,height:7,borderRadius:"50%",background:color}}/>}{children}{onRemove&&<span onClick={e=>{e.stopPropagation();onRemove();}} style={{marginLeft:3,fontSize:10,opacity:.5,cursor:"pointer"}}>✕</span>}</div>);
   const Tab=({active,children,onClick})=>(<button onClick={onClick} style={{padding:"6px 14px",borderRadius:6,border:`1px solid ${active?t.accent:t.border}`,background:active?`${t.accent}18`:"transparent",color:active?t.accent:t.textMuted,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>{children}</button>);
 
-  // 로딩 화면
-  if(loading){return(<div style={{minHeight:"100vh",background:t.bg,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16}}><style>{css}</style><div style={{width:48,height:48,border:`3px solid ${t.border}`,borderTop:`3px solid ${t.accent}`,borderRadius:"50%",animation:"spin .8s linear infinite"}}/><p style={{color:t.textMuted,fontSize:14,fontFamily:"'Outfit',sans-serif"}}>야후 파이낸스 실제 데이터 로딩 중...</p></div>);}
-
-  // 에러 화면
-  if(dataError){return(<div style={{minHeight:"100vh",background:t.bg,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16,padding:40}}><style>{css}</style><div style={{fontSize:48}}>⚠️</div><p style={{color:t.danger,fontSize:16,textAlign:"center"}}>{dataError}</p><p style={{color:t.textMuted,fontSize:12,textAlign:"center"}}>Worker를 배포하고 /api/refresh를 먼저 호출하세요</p><button onClick={()=>window.location.reload()} style={{padding:"10px 24px",background:`${t.accent}18`,border:`1px solid ${t.accent}`,borderRadius:8,color:t.accent,fontSize:14,cursor:"pointer"}}>다시 시도</button></div>);}
-
-  // 사용 가능한 자산 목록 (실제 데이터 있는 것만)
-  const availableAssets=Object.keys(ASSET_META).filter(id=>realData[id]||id==="cash_usd"||id==="cash_krw"||id==="kr_reit");
+  if(loading){return(<div style={{minHeight:"100vh",background:t.bg,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16}}><style>{css}</style><div style={{width:48,height:48,border:`3px solid ${t.border}`,borderTop:`3px solid ${t.accent}`,borderRadius:"50%",animation:"spin .8s linear infinite"}}/><p style={{color:t.textMuted,fontSize:14,fontFamily:"'Outfit',sans-serif"}}>실제 데이터 로딩 중...</p></div>);}
+  if(dataError){return(<div style={{minHeight:"100vh",background:t.bg,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16,padding:40}}><style>{css}</style><div style={{fontSize:48}}>⚠️</div><p style={{color:t.danger,fontSize:16,textAlign:"center"}}>{dataError}</p><button onClick={()=>window.location.reload()} style={{padding:"10px 24px",background:`${t.accent}18`,border:`1px solid ${t.accent}`,borderRadius:8,color:t.accent,fontSize:14,cursor:"pointer"}}>다시 시도</button></div>);}
 
   return(
     <div style={{minHeight:"100vh",background:t.bg,color:t.text,fontFamily:"'Outfit',-apple-system,sans-serif",transition:"background .3s"}}>
@@ -257,13 +260,9 @@ export default function App(){
 
       <header style={{borderBottom:`1px solid ${t.border}`,padding:"0 20px",background:dark?"rgba(10,14,23,.95)":"rgba(255,255,255,.95)",backdropFilter:"blur(12px)",position:"sticky",top:0,zIndex:100}}>
         <div style={{maxWidth:1400,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between",height:48}}>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <div style={{width:28,height:28,borderRadius:7,background:`linear-gradient(135deg,${t.accent},${t.accentDark})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:dark?"#0A0E17":"#fff"}}>P</div>
-            <span style={{fontWeight:800,fontSize:16,letterSpacing:"-.5px"}}>PortfolioLab</span>
-            <span style={{fontSize:9,color:t.accent,fontWeight:700,background:`${t.accent}18`,padding:"2px 5px",borderRadius:3}}>LIVE DATA</span>
-          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:28,height:28,borderRadius:7,background:`linear-gradient(135deg,${t.accent},${t.accentDark})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:dark?"#0A0E17":"#fff"}}>P</div><span style={{fontWeight:800,fontSize:16,letterSpacing:"-.5px"}}>PortfolioLab</span><span style={{fontSize:9,color:t.accent,fontWeight:700,background:`${t.accent}18`,padding:"2px 5px",borderRadius:3}}>LIVE DATA</span></div>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            {dataInfo&&<span style={{fontSize:10,color:t.textDim}}>📡 {dataInfo.total}개 자산 · {new Date(dataInfo.updatedAt).toLocaleDateString("ko-KR")} 기준</span>}
+            {dataInfo&&<span style={{fontSize:10,color:t.textDim}}>📡 {dataInfo.total}개 자산 · {new Date(dataInfo.updatedAt).toLocaleDateString("ko-KR")}</span>}
             <button onClick={()=>setDark(!dark)} style={{background:t.bgSurface,border:`1px solid ${t.border}`,borderRadius:6,padding:"5px 10px",color:t.textMuted,fontSize:11,cursor:"pointer"}}>{dark?"☀️ 라이트":"🌙 다크"}</button>
           </div>
         </div>
@@ -380,16 +379,15 @@ export default function App(){
           <div style={{marginBottom:12}}><div style={{fontSize:11,color:t.textMuted,marginBottom:3}}>이름</div><input type="text" value={editP.name} onChange={e=>setEditP(p=>({...p,name:e.target.value}))} placeholder="내 포트폴리오" style={{width:"100%"}}/></div>
           <div style={{marginBottom:12}}><div style={{fontSize:11,color:t.textMuted,marginBottom:3}}>색상</div><div style={{display:"flex",gap:5}}>{["#D85A30","#BA7517","#EC4899","#8B5CF6","#06B6D4","#EF4444","#10B981"].map(c=><div key={c} onClick={()=>setEditP(p=>({...p,color:c}))} style={{width:22,height:22,borderRadius:"50%",background:c,cursor:"pointer",border:editP.color===c?`2px solid ${t.text}`:"2px solid transparent"}}/>)}</div></div>
           <div style={{marginBottom:12}}>
-            <div style={{fontSize:11,color:t.textMuted,marginBottom:6}}>자산 구성 <span style={{color:t.accent,fontSize:10}}>({availableAssets.length}개 사용가능)</span></div>
+            <div style={{fontSize:11,color:t.textMuted,marginBottom:6}}>자산 구성</div>
             {editP.assets.map((asset,i)=>{const info=ga(asset.a);return(
               <div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,padding:"6px 8px",borderRadius:8,background:t.bgSurface,border:`1px solid ${t.border}`}}>
                 <span style={{width:8,height:8,borderRadius:2,background:info.color}}/><span style={{flex:1,fontSize:12,fontWeight:500}}>{info.name}</span>
-                <span style={{fontSize:10,color:t.textDim,padding:"1px 5px",borderRadius:3,background:`${t.accent}12`}}>{info.type}</span>
                 <input type="number" value={asset.w} onChange={e=>{const a=[...editP.assets];a[i]={...a[i],w:+e.target.value};setEditP(p=>({...p,assets:a}));}} style={{width:50,fontSize:12,textAlign:"right"}}/><span style={{fontSize:11,color:t.textDim}}>%</span>
                 <button onClick={()=>setEditP(p=>({...p,assets:p.assets.filter((_,j)=>j!==i)}))} style={{background:"transparent",border:"none",color:t.danger,cursor:"pointer",fontSize:13}}>✕</button>
               </div>);})}
             {picker?<div style={{background:t.bgSurface,border:`1px solid ${t.border}`,borderRadius:10,padding:12,marginTop:6,maxHeight:250,overflow:"auto"}}>
-              {["주식","채권","대체","부동산","현금"].map(cat=><div key={cat} style={{marginBottom:10}}><div style={{fontSize:10,fontWeight:700,color:t.textDim,marginBottom:4}}>{cat}</div><div style={{display:"flex",flexWrap:"wrap",gap:4}}>{Object.entries(ASSET_META).filter(([_,a])=>a.cat===cat).map(([id,a])=>{const al=editP.assets.some(x=>x.a===id);const hasData=availableAssets.includes(id);return<div key={id} onClick={()=>!al&&hasData&&addA(id)} style={{display:"flex",alignItems:"center",gap:4,padding:"4px 8px",borderRadius:6,border:`1px solid ${al?t.accent:t.border}`,background:al?`${t.accent}12`:"transparent",cursor:al||!hasData?"default":"pointer",opacity:al?.5:hasData?1:.3,fontSize:11,color:al?t.accent:t.textMuted}}><span style={{width:6,height:6,borderRadius:"50%",background:a.color}}/>{a.name}{!hasData&&" ⚠️"}</div>;})}</div></div>)}
+              {["주식","채권","대체","부동산","현금"].map(cat=><div key={cat} style={{marginBottom:10}}><div style={{fontSize:10,fontWeight:700,color:t.textDim,marginBottom:4}}>{cat}</div><div style={{display:"flex",flexWrap:"wrap",gap:4}}>{Object.entries(ASSET_META).filter(([_,a])=>a.cat===cat).map(([id,a])=>{const al=editP.assets.some(x=>x.a===id);const has=availableAssets.includes(id);return<div key={id} onClick={()=>!al&&has&&addA(id)} style={{display:"flex",alignItems:"center",gap:4,padding:"4px 8px",borderRadius:6,border:`1px solid ${al?t.accent:t.border}`,background:al?`${t.accent}12`:"transparent",cursor:al||!has?"default":"pointer",opacity:al?.5:has?1:.3,fontSize:11,color:al?t.accent:t.textMuted}}><span style={{width:6,height:6,borderRadius:"50%",background:a.color}}/>{a.name}</div>;})}</div></div>)}
               <button onClick={()=>setPicker(false)} style={{width:"100%",marginTop:4,padding:"5px",borderRadius:6,border:`1px solid ${t.border}`,background:"transparent",color:t.textMuted,fontSize:11,cursor:"pointer"}}>닫기</button>
             </div>:<button onClick={()=>setPicker(true)} style={{width:"100%",marginTop:6,padding:"7px",borderRadius:8,border:`1px dashed ${t.border}`,background:"transparent",color:t.textMuted,fontSize:12,cursor:"pointer"}}>+ 자산 추가</button>}
             <div style={{display:"flex",justifyContent:"flex-end",marginTop:8}}><span style={{fontSize:12,fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:editP.assets.reduce((s,a)=>s+a.w,0)===100?t.accent:t.danger}}>합계: {editP.assets.reduce((s,a)=>s+a.w,0)}%{editP.assets.reduce((s,a)=>s+a.w,0)!==100&&" (100% 필요)"}</span></div>
@@ -401,7 +399,7 @@ export default function App(){
         </div>
       </div>}
 
-      <footer style={{maxWidth:1400,margin:"0 auto",padding:"20px",borderTop:`1px solid ${t.border}`,textAlign:"center"}}><div style={{fontSize:11,color:t.textDim}}>⚠️ 야후 파이낸스 실제 데이터 기반. 투자 조언이 아닙니다.</div><div style={{fontSize:10,color:t.textDim,marginTop:3}}>© 2026 PortfolioLab · Powered by Yahoo Finance</div></footer>
+      <footer style={{maxWidth:1400,margin:"0 auto",padding:"20px",borderTop:`1px solid ${t.border}`,textAlign:"center"}}><div style={{fontSize:11,color:t.textDim}}>⚠️ 야후 파이낸스 실제 데이터 기반. 투자 조언이 아닙니다.</div><div style={{fontSize:10,color:t.textDim,marginTop:3}}>© 2026 PortfolioLab</div></footer>
     </div>
   );
 }
