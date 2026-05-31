@@ -1,34 +1,38 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, ReferenceLine } from "recharts";
+
+// ============================================================
+// 워커 API 주소 — 배포 후 본인 주소로 변경
+// ============================================================
+const API_URL = "https://portfoliolab-api.david-choi2631.workers.dev";
 
 const DARK={bg:"#0A0E17",bgCard:"#111827",bgSurface:"#1A1F2E",text:"#E5E7EB",textMuted:"#A0A6B2",textDim:"#6B7280",border:"rgba(255,255,255,0.06)",accent:"#00E5A0",accentDark:"#00B87D",danger:"#FF6B6B",warning:"#F59E0B",info:"#3B82F6"};
 const LIGHT={bg:"#F9FAFB",bgCard:"#FFFFFF",bgSurface:"#F3F4F6",text:"#111827",textMuted:"#4B5563",textDim:"#6B7280",border:"rgba(0,0,0,0.08)",accent:"#059669",accentDark:"#047857",danger:"#DC2626",warning:"#D97706",info:"#2563EB"};
 
-const ASSETS=[
-  {id:"us_sp500",name:"미국 S&P500",cat:"주식",type:"해외",color:"#3B82F6",br:0.009,vol:0.045},
-  {id:"us_nasdaq",name:"미국 나스닥100",cat:"주식",type:"해외",color:"#8B5CF6",br:0.011,vol:0.055},
-  {id:"us_small",name:"미국 소형가치주",cat:"주식",type:"해외",color:"#6366F1",br:0.008,vol:0.05},
-  {id:"kr_kospi",name:"한국 KOSPI",cat:"주식",type:"국내",color:"#EC4899",br:0.006,vol:0.05},
-  {id:"dev_ex",name:"선진국 주식(미국외)",cat:"주식",type:"해외",color:"#14B8A6",br:0.005,vol:0.04},
-  {id:"em",name:"신흥국 주식",cat:"주식",type:"해외",color:"#F97316",br:0.006,vol:0.06},
-  {id:"bond_long",name:"미국 장기채(20년+)",cat:"채권",type:"해외",color:"#06B6D4",br:0.004,vol:0.025},
-  {id:"bond_mid",name:"미국 중기채(7~10년)",cat:"채권",type:"해외",color:"#0EA5E9",br:0.003,vol:0.015},
-  {id:"bond_short",name:"미국 단기채(1~3년)",cat:"채권",type:"해외",color:"#67E8F9",br:0.002,vol:0.005},
-  {id:"bond_agg",name:"미국 종합채권",cat:"채권",type:"해외",color:"#22D3EE",br:0.003,vol:0.01},
-  {id:"tips",name:"미국 물가연동채",cat:"채권",type:"해외",color:"#2DD4BF",br:0.002,vol:0.012},
-  {id:"kr_bond",name:"한국 국채 10년",cat:"채권",type:"국내",color:"#5EEAD4",br:0.003,vol:0.01},
-  {id:"gold",name:"금(Gold)",cat:"대체",type:"해외",color:"#F59E0B",br:0.005,vol:0.035},
-  {id:"silver",name:"은(Silver)",cat:"대체",type:"해외",color:"#D4D4D8",br:0.004,vol:0.06},
-  {id:"commodity",name:"원자재 종합",cat:"대체",type:"해외",color:"#A16207",br:0.002,vol:0.04},
-  {id:"btc",name:"비트코인(BTC)",cat:"대체",type:"해외",color:"#F7931A",br:0.02,vol:0.2},
-  {id:"eth",name:"이더리움(ETH)",cat:"대체",type:"해외",color:"#627EEA",br:0.018,vol:0.22},
-  {id:"us_reit",name:"미국 부동산(REITs)",cat:"부동산",type:"해외",color:"#E11D48",br:0.006,vol:0.04},
-  {id:"gl_reit",name:"글로벌 부동산(REITs)",cat:"부동산",type:"해외",color:"#BE185D",br:0.005,vol:0.04},
-  {id:"kr_reit",name:"한국 부동산(REITs)",cat:"부동산",type:"국내",color:"#FB7185",br:0.005,vol:0.035},
-  {id:"cash_usd",name:"현금(달러)",cat:"현금",type:"해외",color:"#9CA3AF",br:0.003,vol:0.001},
-  {id:"cash_krw",name:"현금(원화)",cat:"현금",type:"국내",color:"#6B7280",br:0.002,vol:0.001},
-];
-function ga(id){return ASSETS.find(a=>a.id===id)||{name:id,color:"#888",br:0.005,vol:0.03,type:"해외",cat:"기타"};}
+const ASSET_META={
+  us_sp500:{name:"미국 S&P500",cat:"주식",type:"해외",color:"#3B82F6"},
+  us_nasdaq:{name:"미국 나스닥100",cat:"주식",type:"해외",color:"#8B5CF6"},
+  us_small:{name:"미국 소형가치주",cat:"주식",type:"해외",color:"#6366F1"},
+  kr_kospi:{name:"한국 KOSPI",cat:"주식",type:"국내",color:"#EC4899"},
+  dev_ex:{name:"선진국 주식(미국외)",cat:"주식",type:"해외",color:"#14B8A6"},
+  em:{name:"신흥국 주식",cat:"주식",type:"해외",color:"#F97316"},
+  bond_long:{name:"미국 장기채(20년+)",cat:"채권",type:"해외",color:"#06B6D4"},
+  bond_mid:{name:"미국 중기채(7~10년)",cat:"채권",type:"해외",color:"#0EA5E9"},
+  bond_short:{name:"미국 단기채(1~3년)",cat:"채권",type:"해외",color:"#67E8F9"},
+  bond_agg:{name:"미국 종합채권",cat:"채권",type:"해외",color:"#22D3EE"},
+  tips:{name:"미국 물가연동채",cat:"채권",type:"해외",color:"#2DD4BF"},
+  gold:{name:"금(Gold)",cat:"대체",type:"해외",color:"#F59E0B"},
+  silver:{name:"은(Silver)",cat:"대체",type:"해외",color:"#D4D4D8"},
+  commodity:{name:"원자재 종합",cat:"대체",type:"해외",color:"#A16207"},
+  btc:{name:"비트코인(BTC)",cat:"대체",type:"해외",color:"#F7931A"},
+  eth:{name:"이더리움(ETH)",cat:"대체",type:"해외",color:"#627EEA"},
+  us_reit:{name:"미국 부동산(REITs)",cat:"부동산",type:"해외",color:"#E11D48"},
+  gl_reit:{name:"글로벌 부동산(REITs)",cat:"부동산",type:"해외",color:"#BE185D"},
+  kr_reit:{name:"한국 부동산(REITs)",cat:"부동산",type:"국내",color:"#FB7185"},
+  cash_usd:{name:"현금(달러)",cat:"현금",type:"해외",color:"#9CA3AF"},
+  cash_krw:{name:"현금(원화)",cat:"현금",type:"국내",color:"#6B7280"},
+};
+function ga(id){return ASSET_META[id]||{name:id,color:"#888",cat:"기타",type:"해외"};}
 
 const THEORIES=[
   {id:"allweather",name:"올웨더",color:"#3B82F6",assets:[{a:"us_sp500",w:30},{a:"bond_long",w:40},{a:"bond_mid",w:15},{a:"gold",w:7.5},{a:"commodity",w:7.5}]},
@@ -39,39 +43,101 @@ const THEORIES=[
   {id:"riskparity",name:"리스크 패리티",color:"#06B6D4",assets:[{a:"us_sp500",w:12},{a:"bond_long",w:35},{a:"bond_mid",w:20},{a:"gold",w:18},{a:"commodity",w:15}]},
 ];
 
-function genMonths(s,e){const m=[];const[sy,sm]=s.split("-").map(Number);const[ey,em]=e.split("-").map(Number);for(let y=sy;y<=ey;y++)for(let mo=1;mo<=12;mo++){if(y===sy&&mo<sm)continue;if(y===ey&&mo>em)break;m.push(`${y}-${String(mo).padStart(2,"0")}`);}return m;}
+// ============================================================
+// 실제 데이터 기반 백테스트 엔진
+// ============================================================
+function runBacktest(port, months, hr, hc, rebal, initAmt, realData, fxData) {
+  const en = port.assets.map(x => ({ ...x, ...ga(x.a) }));
+  const ri = rebal === "monthly" ? 1 : rebal === "quarterly" ? 3 : 12;
+  const fw = en.filter(x => x.type === "해외").reduce((s, x) => s + x.w, 0) / 100;
+  const hcm = (hc / 100) * (hr / 100) * fw / 12;
 
-function sim(port,months,hr,hc,rebal,initAmt){
-  const seed=(port.id||"x").split("").reduce((a,c)=>a+c.charCodeAt(0),0);let rng=seed;
-  const rand=()=>{rng=(rng*16807+7)%2147483647;return(rng/2147483647)-0.5;};
-  let tot=initAmt,peak=tot,mdd=0;const data=[],mRet=[],aRet={};
-  const en=port.assets.map(x=>({...x,...ga(x.a)}));
-  en.forEach(x=>{aRet[x.a]=[];});
-  const fw=en.filter(x=>x.type==="해외").reduce((s,x)=>s+x.w,0)/100;
-  const hcm=(hc/100)*(hr/100)*fw/12;
-  const cr={"2001-09":-0.08,"2002-07":-0.07,"2008-09":-0.12,"2008-10":-0.16,"2008-11":-0.07,"2020-03":-0.13};
-  const bm={"2003-03":0.08,"2009-03":0.09,"2009-04":0.1,"2020-04":0.12,"2020-11":0.1,"2021-01":0.06};
-  const ri=rebal==="monthly"?1:rebal==="quarterly"?3:12;
-  months.forEach((month,idx)=>{
-    let pr=0;en.forEach(x=>{
-      let r=x.br+rand()*x.vol*2;
-      if(cr[month]){if(x.cat==="주식")r=cr[month]*(x.vol/0.045);else if(x.cat==="채권")r=Math.abs(cr[month])*0.3;else if(x.id==="gold")r=Math.abs(cr[month])*0.2;else if(x.id==="btc"||x.id==="eth")r=cr[month]*1.5;}
-      if(bm[month]){if(x.cat==="주식")r=bm[month]*(x.vol/0.045);else if(x.id==="btc"||x.id==="eth")r=bm[month]*2;}
-      if(idx%ri!==0)r*=(1+(rand()*0.005));
-      aRet[x.a].push({month,ret:Math.round(r*10000)/100});pr+=r*(x.w/100);
+  let tot = initAmt, peak = tot, mdd = 0;
+  const data = [], mRet = [], aRetMap = {};
+  en.forEach(x => { aRetMap[x.a] = []; });
+
+  months.forEach((month, idx) => {
+    let portRet = 0;
+
+    en.forEach(x => {
+      // 실제 수익률 가져오기
+      let r = 0;
+      if (x.a === "cash_usd") r = 0.003 / 12; // 연 0.3% 가정
+      else if (x.a === "cash_krw") r = 0.002 / 12;
+      else if (x.a === "kr_reit") r = 0.005 / 12; // 데이터 없으면 추정
+      else if (realData[x.a]) {
+        const assetData = realData[x.a].data;
+        const point = assetData.find(d => d.date === month);
+        if (point) {
+          r = point.ret;
+        } else {
+          r = 0; // 해당 월 데이터 없으면 0
+        }
+      }
+
+      // 환율 효과 (해외 자산만)
+      if (x.type === "해외" && fxData) {
+        const fxPoint = fxData.find(d => d.date === month);
+        if (fxPoint) {
+          const fxRet = fxPoint.ret;
+          // 헤지 비율에 따라 환율 효과 조절
+          r = r + fxRet * (1 - hr / 100);
+        }
+      }
+
+      // 헤지 비용
+      if (x.type === "해외") {
+        r -= hcm / fw * (x.w / 100); // 비중 비례 헤지 비용
+      }
+
+      aRetMap[x.a].push({ month, ret: Math.round(r * 10000) / 100 });
+      portRet += r * (x.w / 100);
     });
-    pr+=(1-hr/100)*fw*rand()*0.015;pr-=hcm;
-    tot*=(1+pr);mRet.push(pr);if(tot>peak)peak=tot;const dd=(tot-peak)/peak;if(dd<mdd)mdd=dd;
-    data.push({date:month,value:Math.round(tot),dd:Math.round(dd*10000)/100,pct:Math.round((tot/initAmt-1)*10000)/100});
+
+    tot *= (1 + portRet);
+    mRet.push(portRet);
+    if (tot > peak) peak = tot;
+    const dd = (tot - peak) / peak;
+    if (dd < mdd) mdd = dd;
+    data.push({ date: month, value: Math.round(tot), dd: Math.round(dd * 10000) / 100, pct: Math.round((tot / initAmt - 1) * 10000) / 100 });
   });
-  const yrs=months.length/12;const cagr=(Math.pow(tot/initAmt,1/yrs)-1)*100;
-  const avg=mRet.reduce((a,b)=>a+b,0)/mRet.length;
-  const vol=Math.sqrt(mRet.reduce((a,r)=>a+(r-avg)**2,0)/mRet.length)*Math.sqrt(12)*100;
-  const sharpe=vol>0?(cagr-2)/vol:0;
-  const yba={};en.forEach(x=>{aRet[x.a].forEach(r=>{const yr=r.month.split("-")[0];if(!yba[yr])yba[yr]={year:yr};if(!yba[yr][x.a])yba[yr][x.a]=0;yba[yr][x.a]+=r.ret;});});
-  Object.keys(yba).forEach(yr=>{let pt=0;en.forEach(x=>{pt+=(yba[yr][x.a]||0)*(x.w/100);});yba[yr]._total=Math.round(pt*100)/100;});
-  return{data,yba:Object.values(yba).sort((a,b)=>a.year.localeCompare(b.year)),totalRet:Math.round((tot/initAmt-1)*1000)/10,cagr:Math.round(cagr*100)/100,mdd:Math.round(mdd*10000)/100,sharpe:Math.round(sharpe*100)/100,vol:Math.round(vol*10)/10,en,finalVal:Math.round(tot)};
+
+  const yrs = months.length / 12;
+  const cagr = yrs > 0 ? (Math.pow(tot / initAmt, 1 / yrs) - 1) * 100 : 0;
+  const avg = mRet.length > 0 ? mRet.reduce((a, b) => a + b, 0) / mRet.length : 0;
+  const vol = mRet.length > 0 ? Math.sqrt(mRet.reduce((a, r) => a + (r - avg) ** 2, 0) / mRet.length) * Math.sqrt(12) * 100 : 0;
+  const sharpe = vol > 0 ? (cagr - 2) / vol : 0;
+
+  // 연도별 자산별 수익률
+  const yba = {};
+  en.forEach(x => {
+    aRetMap[x.a].forEach(r => {
+      const yr = r.month.split("-")[0];
+      if (!yba[yr]) yba[yr] = { year: yr };
+      if (!yba[yr][x.a]) yba[yr][x.a] = 0;
+      yba[yr][x.a] += r.ret;
+    });
+  });
+  Object.keys(yba).forEach(yr => {
+    let pt = 0;
+    en.forEach(x => { pt += (yba[yr][x.a] || 0) * (x.w / 100); });
+    yba[yr]._total = Math.round(pt * 100) / 100;
+  });
+
+  return {
+    data,
+    yba: Object.values(yba).sort((a, b) => a.year.localeCompare(b.year)),
+    totalRet: Math.round((tot / initAmt - 1) * 1000) / 10,
+    cagr: Math.round(cagr * 100) / 100,
+    mdd: Math.round(mdd * 10000) / 100,
+    sharpe: Math.round(sharpe * 100) / 100,
+    vol: Math.round(vol * 10) / 10,
+    en,
+    finalVal: Math.round(tot),
+  };
 }
+
+function genMonths(s,e){const m=[];const[sy,sm]=s.split("-").map(Number);const[ey,em]=e.split("-").map(Number);for(let y=sy;y<=ey;y++)for(let mo=1;mo<=12;mo++){if(y===sy&&mo<sm)continue;if(y===ey&&mo>em)break;m.push(`${y}-${String(mo).padStart(2,"0")}`);}return m;}
 
 function CalPicker({value,onChange,t}){
   const[open,setOpen]=useState(false);const[yr,mo]=value.split("-").map(Number);const[viewYr,setViewYr]=useState(yr);const[mode,setMode]=useState("month");
@@ -91,9 +157,7 @@ function CalPicker({value,onChange,t}){
   </div>);
 }
 
-const CURRENCIES=[{id:"KRW",sym:"₩",name:"원화"},{id:"USD",sym:"$",name:"달러"},{id:"EUR",sym:"€",name:"유로"},{id:"JPY",sym:"¥",name:"엔화"}];
-
-// 천원단위 포맷
+const CURRENCIES=[{id:"KRW",sym:"₩"},{id:"USD",sym:"$"},{id:"EUR",sym:"€"},{id:"JPY",sym:"¥"}];
 function fmtNum(v){return Number(v).toLocaleString();}
 function fmtShort(v){if(v>=100000000)return`${(v/100000000).toFixed(1)} 억`;if(v>=10000)return`${fmtNum(Math.round(v/10000))} 만`;return fmtNum(v);}
 
@@ -115,6 +179,32 @@ export default function App(){
   const[currency,setCurrency]=useState("KRW");
   const curSym=CURRENCIES.find(c=>c.id===currency)?.sym||"₩";
   const fmtAmt=v=>`${curSym} ${fmtNum(v)}`;
+  const[amtInput,setAmtInput]=useState(fmtNum(initAmt));
+  const handleAmtChange=e=>{const raw=e.target.value.replace(/[^0-9]/g,"");const num=parseInt(raw)||0;setInitAmt(num);setAmtInput(fmtNum(num));};
+  const handleAmtBlur=()=>setAmtInput(fmtNum(initAmt));
+
+  // 실제 데이터 로딩
+  const[realData,setRealData]=useState(null);
+  const[loading,setLoading]=useState(true);
+  const[dataError,setDataError]=useState(null);
+  const[dataInfo,setDataInfo]=useState(null);
+
+  useEffect(()=>{
+    async function load(){
+      try{
+        setLoading(true);
+        const res=await fetch(`${API_URL}/api/data`);
+        if(!res.ok) throw new Error("API 응답 오류");
+        const json=await res.json();
+        if(!json.assets) throw new Error("데이터 없음. /api/refresh를 먼저 호출하세요.");
+        setRealData(json.assets);
+        setDataInfo({updatedAt:json.updatedAt,total:json.totalAssets,available:json.availableAssets});
+        setDataError(null);
+      }catch(e){setDataError(e.message);}
+      finally{setLoading(false);}
+    }
+    load();
+  },[]);
 
   const secRef={cum:useRef(null),mdd:useRef(null),yearly:useRef(null),alloc:useRef(null)};
   const scrollTo=k=>{secRef[k]?.current?.scrollIntoView({behavior:"smooth",block:"start"});};
@@ -122,8 +212,24 @@ export default function App(){
   const allP=[...THEORIES,...customs];
   const activeP=allP.filter(p=>sel.includes(p.id));
   const months=useMemo(()=>genMonths(startD,endD),[startD,endD]);
-  const results=useMemo(()=>{const r={};activeP.forEach(p=>{r[p.id]=sim(p,months,hr,hc,rebal,initAmt);});return r;},[activeP.map(p=>p.id).join(","),months.length,hr,hc,rebal,initAmt]);
-  const chartData=useMemo(()=>{if(!activeP.length)return[];const base=results[activeP[0].id]?.data||[];return base.map((d,i)=>{const pt={date:d.date};activeP.forEach(p=>{const rd=results[p.id]?.data[i];if(rd){pt[`${p.id}_v`]=rd.value;pt[`${p.id}_p`]=rd.pct;pt[`${p.id}_d`]=rd.dd;}});return pt;});},[results,activeP.map(p=>p.id).join(",")]);
+
+  // 환율 데이터
+  const fxData=useMemo(()=>{
+    if(!realData||!realData.fx_usdkrw) return null;
+    return realData.fx_usdkrw.data;
+  },[realData]);
+
+  // 실제 데이터로 백테스트 실행
+  const results=useMemo(()=>{
+    if(!realData) return {};
+    const r={};
+    activeP.forEach(p=>{
+      r[p.id]=runBacktest(p,months,hr,hc,rebal,initAmt,realData,fxData);
+    });
+    return r;
+  },[activeP.map(p=>p.id).join(","),months.length,hr,hc,rebal,initAmt,realData]);
+
+  const chartData=useMemo(()=>{if(!activeP.length||!realData) return[];const first=activeP[0];const base=results[first.id]?.data||[];return base.map((d,i)=>{const pt={date:d.date};activeP.forEach(p=>{const rd=results[p.id]?.data[i];if(rd){pt[`${p.id}_v`]=rd.value;pt[`${p.id}_p`]=rd.pct;pt[`${p.id}_d`]=rd.dd;}});return pt;});},[results,activeP.map(p=>p.id).join(","),realData]);
 
   const toggle=id=>setSel(p=>p.includes(id)?p.filter(x=>x!==id):[...p,id]);
   const addC=()=>{const id="c_"+Date.now();setCustoms(p=>[...p,{...editP,id}]);setSel(p=>[...p,id]);setShowModal(false);setEditP({name:"",color:"#D85A30",assets:[]});};
@@ -131,16 +237,19 @@ export default function App(){
   const bmResult=results[benchmark];const bmPort=allP.find(p=>p.id===benchmark);
   const ttStyle={background:t.bgCard,border:`1px solid ${t.border}`,borderRadius:8,fontSize:11,color:t.text};
 
-  // 금액 입력 포맷 (display용)
-  const[amtInput,setAmtInput]=useState(fmtNum(initAmt));
-  const handleAmtChange=e=>{const raw=e.target.value.replace(/[^0-9]/g,"");const num=parseInt(raw)||0;setInitAmt(num);setAmtInput(fmtNum(num));};
-  const handleAmtFocus=()=>setAmtInput(String(initAmt));
-  const handleAmtBlur=()=>setAmtInput(fmtNum(initAmt));
-
-  const css=`@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Outfit:wght@300;400;600;800;900&display=swap');*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:${t.border};border-radius:3px}@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}input[type=range]{-webkit-appearance:none;background:${t.border};height:4px;border-radius:2px;outline:none}input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:${t.accent};cursor:pointer}select,input[type=text],input[type=number]{background:${t.bgSurface};border:1px solid ${t.border};color:${t.text};border-radius:6px;padding:6px 10px;font-size:12px;outline:none;font-family:inherit}`;
+  const css=`@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Outfit:wght@300;400;600;800;900&display=swap');*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:${t.border};border-radius:3px}@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}@keyframes spin{to{transform:rotate(360deg)}}input[type=range]{-webkit-appearance:none;background:${t.border};height:4px;border-radius:2px;outline:none}input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:${t.accent};cursor:pointer}select,input[type=text],input[type=number]{background:${t.bgSurface};border:1px solid ${t.border};color:${t.text};border-radius:6px;padding:6px 10px;font-size:12px;outline:none;font-family:inherit}`;
 
   const Chip=({active,color,children,onClick,onRemove})=>(<div onClick={onClick} style={{display:"inline-flex",alignItems:"center",gap:5,padding:"4px 10px",borderRadius:16,border:`1px solid ${active?color||t.accent:t.border}`,background:active?`${color||t.accent}18`:"transparent",cursor:"pointer",fontSize:12,fontWeight:active?600:400,color:active?t.text:t.textMuted,transition:"all .15s",whiteSpace:"nowrap"}}>{color&&<span style={{width:7,height:7,borderRadius:"50%",background:color}}/>}{children}{onRemove&&<span onClick={e=>{e.stopPropagation();onRemove();}} style={{marginLeft:3,fontSize:10,opacity:.5,cursor:"pointer"}}>✕</span>}</div>);
   const Tab=({active,children,onClick})=>(<button onClick={onClick} style={{padding:"6px 14px",borderRadius:6,border:`1px solid ${active?t.accent:t.border}`,background:active?`${t.accent}18`:"transparent",color:active?t.accent:t.textMuted,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>{children}</button>);
+
+  // 로딩 화면
+  if(loading){return(<div style={{minHeight:"100vh",background:t.bg,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16}}><style>{css}</style><div style={{width:48,height:48,border:`3px solid ${t.border}`,borderTop:`3px solid ${t.accent}`,borderRadius:"50%",animation:"spin .8s linear infinite"}}/><p style={{color:t.textMuted,fontSize:14,fontFamily:"'Outfit',sans-serif"}}>야후 파이낸스 실제 데이터 로딩 중...</p></div>);}
+
+  // 에러 화면
+  if(dataError){return(<div style={{minHeight:"100vh",background:t.bg,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16,padding:40}}><style>{css}</style><div style={{fontSize:48}}>⚠️</div><p style={{color:t.danger,fontSize:16,textAlign:"center"}}>{dataError}</p><p style={{color:t.textMuted,fontSize:12,textAlign:"center"}}>Worker를 배포하고 /api/refresh를 먼저 호출하세요</p><button onClick={()=>window.location.reload()} style={{padding:"10px 24px",background:`${t.accent}18`,border:`1px solid ${t.accent}`,borderRadius:8,color:t.accent,fontSize:14,cursor:"pointer"}}>다시 시도</button></div>);}
+
+  // 사용 가능한 자산 목록 (실제 데이터 있는 것만)
+  const availableAssets=Object.keys(ASSET_META).filter(id=>realData[id]||id==="cash_usd"||id==="cash_krw"||id==="kr_reit");
 
   return(
     <div style={{minHeight:"100vh",background:t.bg,color:t.text,fontFamily:"'Outfit',-apple-system,sans-serif",transition:"background .3s"}}>
@@ -148,8 +257,15 @@ export default function App(){
 
       <header style={{borderBottom:`1px solid ${t.border}`,padding:"0 20px",background:dark?"rgba(10,14,23,.95)":"rgba(255,255,255,.95)",backdropFilter:"blur(12px)",position:"sticky",top:0,zIndex:100}}>
         <div style={{maxWidth:1400,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between",height:48}}>
-          <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:28,height:28,borderRadius:7,background:`linear-gradient(135deg,${t.accent},${t.accentDark})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:dark?"#0A0E17":"#fff"}}>P</div><span style={{fontWeight:800,fontSize:16,letterSpacing:"-.5px"}}>PortfolioLab</span><span style={{fontSize:9,color:t.accent,fontWeight:700,background:`${t.accent}18`,padding:"2px 5px",borderRadius:3}}>BACKTEST</span></div>
-          <button onClick={()=>setDark(!dark)} style={{background:t.bgSurface,border:`1px solid ${t.border}`,borderRadius:6,padding:"5px 10px",color:t.textMuted,fontSize:11,cursor:"pointer"}}>{dark?"☀️ 라이트":"🌙 다크"}</button>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <div style={{width:28,height:28,borderRadius:7,background:`linear-gradient(135deg,${t.accent},${t.accentDark})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:dark?"#0A0E17":"#fff"}}>P</div>
+            <span style={{fontWeight:800,fontSize:16,letterSpacing:"-.5px"}}>PortfolioLab</span>
+            <span style={{fontSize:9,color:t.accent,fontWeight:700,background:`${t.accent}18`,padding:"2px 5px",borderRadius:3}}>LIVE DATA</span>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            {dataInfo&&<span style={{fontSize:10,color:t.textDim}}>📡 {dataInfo.total}개 자산 · {new Date(dataInfo.updatedAt).toLocaleDateString("ko-KR")} 기준</span>}
+            <button onClick={()=>setDark(!dark)} style={{background:t.bgSurface,border:`1px solid ${t.border}`,borderRadius:6,padding:"5px 10px",color:t.textMuted,fontSize:11,cursor:"pointer"}}>{dark?"☀️ 라이트":"🌙 다크"}</button>
+          </div>
         </div>
       </header>
 
@@ -166,7 +282,7 @@ export default function App(){
             </div>
           </div>
           <div style={{width:1,height:28,background:t.border,flexShrink:0}}/>
-          <div><div style={{fontSize:9,color:t.textDim,marginBottom:4,fontWeight:700}}>투자금액</div><div style={{display:"flex",gap:4,alignItems:"center"}}><select value={currency} onChange={e=>setCurrency(e.target.value)} style={{fontSize:11,padding:"4px 6px",borderRadius:4,width:56}}>{CURRENCIES.map(c=><option key={c.id} value={c.id}>{c.sym} {c.id}</option>)}</select><input type="text" value={amtInput} onChange={handleAmtChange} onFocus={handleAmtFocus} onBlur={handleAmtBlur} style={{width:110,fontSize:11,textAlign:"right"}}/></div></div>
+          <div><div style={{fontSize:9,color:t.textDim,marginBottom:4,fontWeight:700}}>투자금액</div><div style={{display:"flex",gap:4,alignItems:"center"}}><select value={currency} onChange={e=>setCurrency(e.target.value)} style={{fontSize:11,padding:"4px 6px",borderRadius:4,width:56}}>{CURRENCIES.map(c=><option key={c.id} value={c.id}>{c.sym} {c.id}</option>)}</select><input type="text" value={amtInput} onChange={handleAmtChange} onBlur={handleAmtBlur} style={{width:110,fontSize:11,textAlign:"right"}}/></div></div>
           <div style={{width:1,height:28,background:t.border,flexShrink:0}}/>
           <div><div style={{fontSize:9,color:t.textDim,marginBottom:4,fontWeight:700}}>기간</div><div style={{display:"flex",alignItems:"center",gap:4}}><CalPicker value={startD} onChange={setStartD} t={t}/><span style={{color:t.textDim,fontSize:11}}>~</span><CalPicker value={endD} onChange={setEndD} t={t}/></div></div>
           <div style={{width:1,height:28,background:t.border,flexShrink:0}}/>
@@ -184,17 +300,15 @@ export default function App(){
         {!activeP.length?(<div style={{textAlign:"center",padding:"60px 0",color:t.textMuted}}><div style={{fontSize:36,marginBottom:10}}>📊</div><div style={{fontSize:15,fontWeight:600}}>포트폴리오를 선택해주세요</div></div>):(
         <div style={{display:"flex",flexDirection:"column",gap:20,animation:"fadeIn .4s ease"}}>
 
-          {/* 누적 수익률 */}
           <div ref={secRef.cum} style={{background:t.bgCard,borderRadius:12,padding:16,border:`1px solid ${t.border}`,scrollMarginTop:140}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-              <div style={{fontSize:14,fontWeight:700}}>📈 누적 수익률</div>
+              <div style={{fontSize:14,fontWeight:700}}>📈 누적 수익률 <span style={{fontSize:10,color:t.accent,fontWeight:600,marginLeft:6}}>실제 데이터</span></div>
               <div style={{display:"flex",gap:3}}><Tab active={cumUnit==="pct"} onClick={()=>setCumUnit("pct")}>% 수익률</Tab><Tab active={cumUnit==="amount"} onClick={()=>setCumUnit("amount")}>{curSym} 금액</Tab></div>
             </div>
             <ResponsiveContainer width="100%" height={360}><LineChart data={chartData} margin={{top:5,right:5,left:10,bottom:0}}><CartesianGrid stroke={t.border} strokeDasharray="3 3"/><XAxis dataKey="date" tick={{fill:t.textDim,fontSize:10}} tickLine={false} axisLine={{stroke:t.border}} interval={Math.floor(chartData.length/8)}/><YAxis tick={{fill:t.textDim,fontSize:10}} tickLine={false} axisLine={false} tickFormatter={cumUnit==="pct"?v=>`${v}%`:v=>fmtShort(v)}/><Tooltip contentStyle={ttStyle} formatter={(v,n)=>{const p=allP.find(x=>cumUnit==="pct"?n===`${x.id}_p`:n===`${x.id}_v`);return[cumUnit==="pct"?`${v}%`:fmtAmt(v),p?.name||""];}}/>{activeP.map(p=><Line key={p.id} type="monotone" dataKey={cumUnit==="pct"?`${p.id}_p`:`${p.id}_v`} stroke={p.color} strokeWidth={1.8} dot={false}/>)}</LineChart></ResponsiveContainer>
             <div style={{display:"flex",gap:12,marginTop:10,flexWrap:"wrap"}}>{activeP.map(p=><div key={p.id} style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:t.textMuted}}><span style={{width:10,height:3,borderRadius:2,background:p.color}}/>{p.name} → {fmtAmt(results[p.id]?.finalVal||0)}</div>)}</div>
           </div>
 
-          {/* 비교표 */}
           <div style={{background:t.bgCard,borderRadius:12,padding:16,border:`1px solid ${t.border}`,overflowX:"auto"}}>
             <div style={{fontSize:14,fontWeight:700,marginBottom:12}}>📋 포트폴리오 비교표</div>
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
@@ -213,26 +327,19 @@ export default function App(){
             </table>
           </div>
 
-          {/* MDD */}
           <div ref={secRef.mdd} style={{background:t.bgCard,borderRadius:12,padding:16,border:`1px solid ${t.border}`,scrollMarginTop:140}}>
             <div style={{fontSize:14,fontWeight:700,marginBottom:12}}>📉 최대 낙폭 (MDD)</div>
             <ResponsiveContainer width="100%" height={300}><AreaChart data={chartData} margin={{top:5,right:5,left:0,bottom:0}}><CartesianGrid stroke={t.border} strokeDasharray="3 3"/><XAxis dataKey="date" tick={{fill:t.textDim,fontSize:10}} tickLine={false} axisLine={{stroke:t.border}} interval={Math.floor(chartData.length/8)}/><YAxis tick={{fill:t.textDim,fontSize:10}} tickLine={false} axisLine={false} tickFormatter={v=>`${v}%`}/><Tooltip contentStyle={ttStyle} formatter={v=>[`${v}%`,"MDD"]}/>{activeP.map(p=><Area key={p.id} type="monotone" dataKey={`${p.id}_d`} stroke={p.color} fill={p.color} fillOpacity={0.08} strokeWidth={1.5} dot={false}/>)}</AreaChart></ResponsiveContainer>
-            <div style={{display:"flex",gap:12,marginTop:10,flexWrap:"wrap"}}>{activeP.map(p=><div key={p.id} style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:t.textMuted}}><span style={{width:10,height:3,borderRadius:2,background:p.color}}/>{p.name} ({results[p.id]?.mdd}%)</div>)}</div>
           </div>
 
-          {/* 연도별 자산 - 클릭 시 테두리/그림자 효과, 커서 없음 */}
           <div ref={secRef.yearly} style={{background:t.bgCard,borderRadius:12,padding:16,border:`1px solid ${t.border}`,scrollMarginTop:140}}>
-            <div style={{fontSize:14,fontWeight:700,marginBottom:4}}>📊 연도별 자산별 수익률</div>
-            <div style={{fontSize:11,color:t.textMuted,marginBottom:12}}>기준: {bmPort?.name||"없음"} · 차트 바를 클릭하면 오른쪽에 상세</div>
+            <div style={{fontSize:14,fontWeight:700,marginBottom:4}}>📊 연도별 자산별 수익률 <span style={{fontSize:10,color:t.accent,fontWeight:600,marginLeft:6}}>실제 데이터</span></div>
+            <div style={{fontSize:11,color:t.textMuted,marginBottom:12}}>기준: {bmPort?.name||"없음"}</div>
             {bmResult&&<div style={{display:"flex",gap:16,alignItems:"flex-start"}}>
               <div style={{flex:"1 1 auto",minWidth:0}}>
                 <ResponsiveContainer width="100%" height={360}>
                   <BarChart data={bmResult.yba} margin={{top:5,right:5,left:0,bottom:0}} onClick={e=>{if(e&&e.activeLabel)setSelYear(selYear===e.activeLabel?null:e.activeLabel);}}>
-                    <CartesianGrid stroke={t.border} strokeDasharray="3 3"/>
-                    <XAxis dataKey="year" tick={{fill:t.textDim,fontSize:10}} tickLine={false} axisLine={{stroke:t.border}} interval={2}/>
-                    <YAxis tick={{fill:t.textDim,fontSize:10}} tickLine={false} axisLine={false} tickFormatter={v=>`${v}%`}/>
-                    <Tooltip contentStyle={ttStyle} cursor={false} formatter={(v,name)=>{const a=ga(name);return[`${Number(v).toFixed(1)}%`,a.name];}}/>
-                    <ReferenceLine y={0} stroke={t.textDim} strokeWidth={0.5}/>
+                    <CartesianGrid stroke={t.border} strokeDasharray="3 3"/><XAxis dataKey="year" tick={{fill:t.textDim,fontSize:10}} tickLine={false} axisLine={{stroke:t.border}} interval={2}/><YAxis tick={{fill:t.textDim,fontSize:10}} tickLine={false} axisLine={false} tickFormatter={v=>`${v}%`}/><Tooltip contentStyle={ttStyle} cursor={false} formatter={(v,name)=>{const a=ga(name);return[`${Number(v).toFixed(1)}%`,a.name];}}/><ReferenceLine y={0} stroke={t.textDim} strokeWidth={0.5}/>
                     {bmResult.en.map(a=><Bar key={a.a} dataKey={a.a} stackId="a" fill={a.color} opacity={0.85} cursor="pointer"/>)}
                   </BarChart>
                 </ResponsiveContainer>
@@ -250,67 +357,30 @@ export default function App(){
             </div>}
           </div>
 
-          {/* 자산 배분 */}
           <div ref={secRef.alloc} style={{background:t.bgCard,borderRadius:12,padding:16,border:`1px solid ${t.border}`,scrollMarginTop:140}}>
             <div style={{fontSize:14,fontWeight:700,marginBottom:12}}>🥧 자산 배분</div>
             <div style={{display:"grid",gridTemplateColumns:activeP.length<=2?"repeat(2,1fr)":"repeat(3,1fr)",gap:16}}>
-              {activeP.map(p=>{const r=results[p.id];if(!r)return null;
-              const pColor=p.color;const lastPct=r.data[r.data.length-1]?.pct||0;
-              return(
+              {activeP.map(p=>{const r=results[p.id];if(!r)return null;const lastPct=r.data[r.data.length-1]?.pct||0;return(
                 <div key={p.id} style={{background:t.bgSurface,borderRadius:10,padding:14,border:`1px solid ${t.border}`}}>
-                  {/* 상단: 이름 좌측 / 기간+CAGR 우측 */}
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
-                    <div style={{fontSize:14,fontWeight:800,color:pColor}}>{p.name}</div>
-                    <div style={{textAlign:"right"}}>
-                      <div style={{fontSize:10,color:t.textDim}}>{startD} ~ {endD}</div>
-                      <div style={{fontSize:9,color:t.textDim,marginTop:1}}>CAGR <span style={{fontSize:14,fontWeight:800,fontFamily:"'JetBrains Mono',monospace",color:r.cagr>=0?t.accent:t.danger}}>{r.cagr>0?"+":""}{r.cagr}%</span></div>
-                    </div>
-                  </div>
-                  {/* 중단: 도넛 + 자산목록 (간격 좁게) */}
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}><div style={{fontSize:14,fontWeight:800,color:p.color}}>{p.name}</div><div style={{textAlign:"right"}}><div style={{fontSize:10,color:t.textDim}}>{startD} ~ {endD}</div><div style={{fontSize:9,color:t.textDim,marginTop:1}}>CAGR <span style={{fontSize:14,fontWeight:800,fontFamily:"'JetBrains Mono',monospace",color:r.cagr>=0?t.accent:t.danger}}>{r.cagr>0?"+":""}{r.cagr}%</span></div></div></div>
                   <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10}}>
-                    <div style={{position:"relative",width:110,height:110,flexShrink:0}}>
-                      <ResponsiveContainer width={110} height={110}><PieChart><Pie data={r.en.map(a=>({name:a.name,value:a.w}))} cx="50%" cy="50%" innerRadius={30} outerRadius={48} dataKey="value" stroke="none" strokeWidth={0}>{r.en.map((a,i)=><Cell key={i} fill={a.color}/>)}</Pie><Tooltip contentStyle={ttStyle} formatter={(v,name)=>[`${v}%`,name]}/></PieChart></ResponsiveContainer>
-                      <div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",textAlign:"center",pointerEvents:"none"}}><div style={{fontSize:11,fontWeight:800,fontFamily:"'JetBrains Mono',monospace",color:t.text}}>{curSym} {fmtShort(r.finalVal)}</div></div>
-                    </div>
-                    <div style={{display:"flex",flexDirection:"column",gap:1,flex:1,minWidth:0}}>
-                      {r.en.map(a=><div key={a.a} style={{display:"flex",alignItems:"center",fontSize:11,color:t.textMuted,gap:4}}>
-                        <span style={{width:5,height:5,borderRadius:"50%",background:a.color,flexShrink:0}}/>
-                        <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{a.name}</span>
-                        <span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:600,flexShrink:0,marginLeft:4}}>{a.w}%</span>
-                      </div>)}
-                    </div>
+                    <div style={{position:"relative",width:110,height:110,flexShrink:0}}><ResponsiveContainer width={110} height={110}><PieChart><Pie data={r.en.map(a=>({name:a.name,value:a.w}))} cx="50%" cy="50%" innerRadius={30} outerRadius={48} dataKey="value" stroke="none">{r.en.map((a,i)=><Cell key={i} fill={a.color}/>)}</Pie><Tooltip contentStyle={ttStyle} formatter={(v,name)=>[`${v}%`,name]}/></PieChart></ResponsiveContainer><div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",textAlign:"center",pointerEvents:"none"}}><div style={{fontSize:11,fontWeight:800,fontFamily:"'JetBrains Mono',monospace",color:t.text}}>{curSym} {fmtShort(r.finalVal)}</div></div></div>
+                    <div style={{display:"flex",flexDirection:"column",gap:1,flex:1,minWidth:0}}>{r.en.map(a=><div key={a.a} style={{display:"flex",alignItems:"center",fontSize:11,color:t.textMuted,gap:4}}><span style={{width:5,height:5,borderRadius:"50%",background:a.color,flexShrink:0}}/><span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{a.name}</span><span style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:600,flexShrink:0,marginLeft:4}}>{a.w}%</span></div>)}</div>
                   </div>
-                  {/* 하단: 에어리어 차트 (꽉 차게) */}
-                  <div style={{borderTop:`1px solid ${t.border}`,paddingTop:8}}>
-                    <ResponsiveContainer width="100%" height={70}>
-                      <AreaChart data={r.data.filter((_,i)=>i%3===0)} margin={{top:2,right:0,left:0,bottom:0}}>
-                        <defs><linearGradient id={`ag-${p.id}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={pColor} stopOpacity={0.35}/><stop offset="100%" stopColor={pColor} stopOpacity={0.02}/></linearGradient></defs>
-                        <Area type="monotone" dataKey="pct" stroke={pColor} strokeWidth={1.5} fill={`url(#ag-${p.id})`} dot={false}/>
-                        <XAxis dataKey="date" hide={true}/>
-                        <YAxis hide={true}/>
-                        <Tooltip contentStyle={ttStyle} formatter={v=>[`${v}%`,"수익률"]} labelFormatter={l=>l}/>
-                      </AreaChart>
-                    </ResponsiveContainer>
-                    <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:t.textDim,marginTop:2}}>
-                      <span>{startD}</span>
-                      <span style={{fontWeight:700,color:lastPct>=0?t.accent:t.danger}}>{lastPct>=0?"+":""}{fmtNum(lastPct)}%</span>
-                      <span>{endD}</span>
-                    </div>
-                  </div>
+                  <div style={{borderTop:`1px solid ${t.border}`,paddingTop:8}}><ResponsiveContainer width="100%" height={70}><AreaChart data={r.data.filter((_,i)=>i%3===0)} margin={{top:2,right:0,left:0,bottom:0}}><defs><linearGradient id={`ag-${p.id}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={p.color} stopOpacity={0.35}/><stop offset="100%" stopColor={p.color} stopOpacity={0.02}/></linearGradient></defs><Area type="monotone" dataKey="pct" stroke={p.color} strokeWidth={1.5} fill={`url(#ag-${p.id})`} dot={false}/><XAxis dataKey="date" hide/><YAxis hide/><Tooltip contentStyle={ttStyle} formatter={v=>[`${v}%`,"수익률"]}/></AreaChart></ResponsiveContainer><div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:t.textDim,marginTop:2}}><span>{startD}</span><span style={{fontWeight:700,color:lastPct>=0?t.accent:t.danger}}>{lastPct>=0?"+":""}{fmtNum(lastPct)}%</span><span>{endD}</span></div></div>
                 </div>);})}
             </div>
           </div>
         </div>)}
       </div>
 
-      {/* 맞춤형 모달 */}
       {showModal&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setShowModal(false)}>
         <div onClick={e=>e.stopPropagation()} style={{background:t.bgCard,borderRadius:14,padding:24,width:"92%",maxWidth:560,border:`1px solid ${t.border}`,maxHeight:"85vh",overflow:"auto"}}>
           <div style={{fontSize:16,fontWeight:800,marginBottom:16}}>맞춤형 포트폴리오</div>
           <div style={{marginBottom:12}}><div style={{fontSize:11,color:t.textMuted,marginBottom:3}}>이름</div><input type="text" value={editP.name} onChange={e=>setEditP(p=>({...p,name:e.target.value}))} placeholder="내 포트폴리오" style={{width:"100%"}}/></div>
           <div style={{marginBottom:12}}><div style={{fontSize:11,color:t.textMuted,marginBottom:3}}>색상</div><div style={{display:"flex",gap:5}}>{["#D85A30","#BA7517","#EC4899","#8B5CF6","#06B6D4","#EF4444","#10B981"].map(c=><div key={c} onClick={()=>setEditP(p=>({...p,color:c}))} style={{width:22,height:22,borderRadius:"50%",background:c,cursor:"pointer",border:editP.color===c?`2px solid ${t.text}`:"2px solid transparent"}}/>)}</div></div>
           <div style={{marginBottom:12}}>
-            <div style={{fontSize:11,color:t.textMuted,marginBottom:6}}>자산 구성</div>
+            <div style={{fontSize:11,color:t.textMuted,marginBottom:6}}>자산 구성 <span style={{color:t.accent,fontSize:10}}>({availableAssets.length}개 사용가능)</span></div>
             {editP.assets.map((asset,i)=>{const info=ga(asset.a);return(
               <div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,padding:"6px 8px",borderRadius:8,background:t.bgSurface,border:`1px solid ${t.border}`}}>
                 <span style={{width:8,height:8,borderRadius:2,background:info.color}}/><span style={{flex:1,fontSize:12,fontWeight:500}}>{info.name}</span>
@@ -319,7 +389,7 @@ export default function App(){
                 <button onClick={()=>setEditP(p=>({...p,assets:p.assets.filter((_,j)=>j!==i)}))} style={{background:"transparent",border:"none",color:t.danger,cursor:"pointer",fontSize:13}}>✕</button>
               </div>);})}
             {picker?<div style={{background:t.bgSurface,border:`1px solid ${t.border}`,borderRadius:10,padding:12,marginTop:6,maxHeight:250,overflow:"auto"}}>
-              {["주식","채권","대체","부동산","현금"].map(cat=><div key={cat} style={{marginBottom:10}}><div style={{fontSize:10,fontWeight:700,color:t.textDim,marginBottom:4}}>{cat}</div><div style={{display:"flex",flexWrap:"wrap",gap:4}}>{ASSETS.filter(a=>a.cat===cat).map(a=>{const al=editP.assets.some(x=>x.a===a.id);return<div key={a.id} onClick={()=>!al&&addA(a.id)} style={{display:"flex",alignItems:"center",gap:4,padding:"4px 8px",borderRadius:6,border:`1px solid ${al?t.accent:t.border}`,background:al?`${t.accent}12`:"transparent",cursor:al?"default":"pointer",opacity:al?.5:1,fontSize:11,color:al?t.accent:t.textMuted}}><span style={{width:6,height:6,borderRadius:"50%",background:a.color}}/>{a.name}</div>;})}</div></div>)}
+              {["주식","채권","대체","부동산","현금"].map(cat=><div key={cat} style={{marginBottom:10}}><div style={{fontSize:10,fontWeight:700,color:t.textDim,marginBottom:4}}>{cat}</div><div style={{display:"flex",flexWrap:"wrap",gap:4}}>{Object.entries(ASSET_META).filter(([_,a])=>a.cat===cat).map(([id,a])=>{const al=editP.assets.some(x=>x.a===id);const hasData=availableAssets.includes(id);return<div key={id} onClick={()=>!al&&hasData&&addA(id)} style={{display:"flex",alignItems:"center",gap:4,padding:"4px 8px",borderRadius:6,border:`1px solid ${al?t.accent:t.border}`,background:al?`${t.accent}12`:"transparent",cursor:al||!hasData?"default":"pointer",opacity:al?.5:hasData?1:.3,fontSize:11,color:al?t.accent:t.textMuted}}><span style={{width:6,height:6,borderRadius:"50%",background:a.color}}/>{a.name}{!hasData&&" ⚠️"}</div>;})}</div></div>)}
               <button onClick={()=>setPicker(false)} style={{width:"100%",marginTop:4,padding:"5px",borderRadius:6,border:`1px solid ${t.border}`,background:"transparent",color:t.textMuted,fontSize:11,cursor:"pointer"}}>닫기</button>
             </div>:<button onClick={()=>setPicker(true)} style={{width:"100%",marginTop:6,padding:"7px",borderRadius:8,border:`1px dashed ${t.border}`,background:"transparent",color:t.textMuted,fontSize:12,cursor:"pointer"}}>+ 자산 추가</button>}
             <div style={{display:"flex",justifyContent:"flex-end",marginTop:8}}><span style={{fontSize:12,fontFamily:"'JetBrains Mono',monospace",fontWeight:700,color:editP.assets.reduce((s,a)=>s+a.w,0)===100?t.accent:t.danger}}>합계: {editP.assets.reduce((s,a)=>s+a.w,0)}%{editP.assets.reduce((s,a)=>s+a.w,0)!==100&&" (100% 필요)"}</span></div>
@@ -331,7 +401,7 @@ export default function App(){
         </div>
       </div>}
 
-      <footer style={{maxWidth:1400,margin:"0 auto",padding:"20px",borderTop:`1px solid ${t.border}`,textAlign:"center"}}><div style={{fontSize:11,color:t.textDim}}>⚠️ 시뮬레이션 데이터 기반. 투자 조언이 아닙니다.</div><div style={{fontSize:10,color:t.textDim,marginTop:3}}>© 2026 PortfolioLab</div></footer>
+      <footer style={{maxWidth:1400,margin:"0 auto",padding:"20px",borderTop:`1px solid ${t.border}`,textAlign:"center"}}><div style={{fontSize:11,color:t.textDim}}>⚠️ 야후 파이낸스 실제 데이터 기반. 투자 조언이 아닙니다.</div><div style={{fontSize:10,color:t.textDim,marginTop:3}}>© 2026 PortfolioLab · Powered by Yahoo Finance</div></footer>
     </div>
   );
 }
